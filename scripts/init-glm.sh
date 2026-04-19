@@ -245,31 +245,60 @@ and fail with "API key not set" errors.
 
 ## Scheduling reminders and one-shot messages
 
-Use this exact pattern:
+Use the `cron_add` tool (JSON). The exact shape for a one-shot Telegram
+reminder:
 
-    zeroclaw cron once <duration> \
-      'zeroclaw channel send "<exact reminder text>" --channel-id telegram --recipient <sender_id>' \
-      --tz <IANA timezone>
+    {
+      "name": "<short label>",
+      "schedule": {"kind": "at", "at": "<UTC ISO 8601>"},
+      "job_type": "shell",
+      "command": "echo \"<exact reminder text>\"",
+      "delivery": {"mode": "announce", "channel": "telegram", "to": "<sender chat_id>"}
+    }
 
-Never pass `--agent` to cron when the goal is to deliver a message at a later
-time. `--agent` schedules a full agent conversation turn at fire time, and
-each tool iteration in that turn gets flushed as its own Telegram message,
-so a single reminder arrives as three or four redundant messages.
-`channel send` is a direct one-shot primitive that delivers exactly one
-message with the literal text.
+Hard rules, in order of damage if broken:
 
-Examples:
+1. `delivery` is REQUIRED. Without it, the shell output writes to the
+   container's stdout and nothing reaches the user. `channel: "telegram"`,
+   `to: <sender chat_id>`. The chat_id is the numeric Telegram user id
+   of whoever sent the current message (same as the allowed_users list).
 
-    # one-shot in 5 minutes, Spain local time
-    zeroclaw cron once 5m 'zeroclaw channel send "Time to go for dinner" --channel-id telegram --recipient 100116514' --tz Europe/Madrid
+2. `at` MUST be ISO 8601 UTC. You have to convert the user's local time
+   yourself. The user's local zone is given in USER.md. For Europe/Madrid
+   in April-October (CEST) the offset is UTC+2; in November-March (CET)
+   it is UTC+1. For "9:05 PM Madrid" in April that is `19:05:00Z`, not
+   `21:05:00Z`. `at` does NOT support a `tz` field; do not add one.
 
-    # daily recurring at 9 AM weekdays
-    zeroclaw cron add '0 9 * * 1-5' 'zeroclaw channel send "Good morning" --channel-id telegram --recipient 100116514' --tz Europe/Madrid
+3. Use `job_type: "shell"` with a simple `echo`, NOT `job_type: "agent"`.
+   Agent-type jobs re-invoke the full agent loop at fire time and each
+   internal tool iteration emits its own Telegram message, so a single
+   reminder arrives as three or four redundant messages.
 
-Pull the recipient id from the current sender metadata, do not guess it.
-If the user specifies a local time, use `--tz` with an IANA zone name
-(Europe/Madrid, America/New_York, Asia/Kolkata, etc.); if they specify
-UTC or an offset, convert to UTC and omit `--tz`.
+4. For recurring schedules use `{"kind": "cron", "expr": "<5-field cron>", "tz": "<IANA zone>"}`.
+   `tz` works on `kind: "cron"` only, never on `kind: "at"`.
+
+Worked example for "remind me at 9:05 PM to have supplements" from a user
+whose chat_id is `100116514` and timezone is Europe/Madrid, in April:
+
+    {
+      "name": "Supplements reminder",
+      "schedule": {"kind": "at", "at": "2026-04-19T19:05:00Z"},
+      "job_type": "shell",
+      "command": "echo \"Time to have your supplements\"",
+      "delivery": {"mode": "announce", "channel": "telegram", "to": "100116514"}
+    }
+
+(9:05 PM Madrid in April is CEST which is UTC+2, so UTC is 19:05:00Z.)
+
+Daily recurring example, weekdays at 9 AM Madrid:
+
+    {
+      "name": "Morning standup",
+      "schedule": {"kind": "cron", "expr": "0 9 * * 1-5", "tz": "Europe/Madrid"},
+      "job_type": "shell",
+      "command": "echo \"Morning, standup in 15\"",
+      "delivery": {"mode": "announce", "channel": "telegram", "to": "100116514"}
+    }
 
 ## Research flow
 
