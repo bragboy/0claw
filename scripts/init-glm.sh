@@ -215,6 +215,34 @@ Current FX rate from ECB via Frankfurter.
     fx-rate EUR USD
     fx-rate EUR USD 100
 
+## Scheduling reminders and one-shot messages
+
+Use this exact pattern:
+
+    zeroclaw cron once <duration> \
+      'zeroclaw channel send "<exact reminder text>" --channel-id telegram --recipient <sender_id>' \
+      --tz <IANA timezone>
+
+Never pass `--agent` to cron when the goal is to deliver a message at a later
+time. `--agent` schedules a full agent conversation turn at fire time, and
+each tool iteration in that turn gets flushed as its own Telegram message,
+so a single reminder arrives as three or four redundant messages.
+`channel send` is a direct one-shot primitive that delivers exactly one
+message with the literal text.
+
+Examples:
+
+    # one-shot in 5 minutes, Spain local time
+    zeroclaw cron once 5m 'zeroclaw channel send "Time to go for dinner" --channel-id telegram --recipient 100116514' --tz Europe/Madrid
+
+    # daily recurring at 9 AM weekdays
+    zeroclaw cron add '0 9 * * 1-5' 'zeroclaw channel send "Good morning" --channel-id telegram --recipient 100116514' --tz Europe/Madrid
+
+Pull the recipient id from the current sender metadata, do not guess it.
+If the user specifies a local time, use `--tz` with an IANA zone name
+(Europe/Madrid, America/New_York, Asia/Kolkata, etc.); if they specify
+UTC or an offset, convert to UTC and omit `--tz`.
+
 ## Research flow
 
 For research that goes beyond a headline, use web_search to discover URLs,
