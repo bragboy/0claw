@@ -77,8 +77,8 @@ RUN set -eux; \
 
 COPY --from=web-build /build/web/dist /opt/zeroclaw/web-dist
 
-COPY scripts/init-zen.sh /usr/local/bin/init-zen.sh
-RUN chmod +x /usr/local/bin/init-zen.sh
+COPY scripts/init-glm.sh /usr/local/bin/init-glm.sh
+RUN chmod +x /usr/local/bin/init-glm.sh
 
 RUN mkdir -p "${ZEROCLAW_HOME}" "${CLAUDE_HOME}" "${WORKSPACE}"
 

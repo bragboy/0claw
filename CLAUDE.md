@@ -3,8 +3,9 @@
 ## Project
 
 `0claw` is a Dockerized 24/7 AI automation hub: a single ZeroClaw daemon
-backed by the `opencode-zen` provider, chatting over Telegram, with the
-`claude-code` and `gemini-cli` CLIs bundled as alternate "brains".
+backed by GLM through z.ai's Anthropic-compatible endpoint, chatting over
+Telegram, with the `claude-code` and `gemini-cli` CLIs bundled as alternate
+"brains" (the `claude` CLI is pre-wired through the same GLM endpoint).
 
 See [README.md](README.md) for the user-facing setup flow.
 

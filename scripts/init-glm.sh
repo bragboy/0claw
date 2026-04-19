@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
-# init-zen.sh - point ZeroClaw at OpenCode Zen, bind the gateway to the host,
-# and (if credentials are present) wire the Telegram channel. Idempotent:
-# safe to re-run whenever .env changes.
+# init-glm.sh - point ZeroClaw at GLM via z.ai's Anthropic-compatible
+# endpoint, bind the gateway to the host, and (if credentials are present)
+# wire the Telegram channel. Idempotent: safe to re-run whenever .env
+# changes.
 set -euo pipefail
 
-: "${OPENCODE_API_KEY:?OPENCODE_API_KEY is not set - populate it in .env and restart}"
+: "${GLM_API_KEY:?GLM_API_KEY is not set - populate it in .env and restart}"
 
 ZC_HOME="${ZEROCLAW_HOME:-$HOME/.zeroclaw}"
 ZC_CONFIG="${ZC_HOME}/config.toml"
 WS_DIR="${ZC_HOME}/workspace"
-DEFAULT_MODEL="${ZEROCLAW_DEFAULT_MODEL:-claude-sonnet-4-5}"
+GLM_ENDPOINT="${ANTHROPIC_BASE_URL:-https://api.z.ai/api/anthropic}"
+DEFAULT_MODEL="${ZEROCLAW_DEFAULT_MODEL:-glm-4.6}"
 GATEWAY_HOST="${ZEROCLAW_GATEWAY_HOST:-0.0.0.0}"
 GATEWAY_PORT="${ZEROCLAW_GATEWAY_PORT:-42617}"
 AGENT_NAME="${AGENT_NAME:-Reshma}"
@@ -19,10 +21,10 @@ mkdir -p "${ZC_HOME}" "${WS_DIR}"
 
 {
   cat <<EOF
-# Managed by init-zen.sh - regenerated on each run.
-default_provider = "opencode-zen"
+# Managed by init-glm.sh - regenerated on each run.
+default_provider = "anthropic-custom:${GLM_ENDPOINT}"
 default_model    = "${DEFAULT_MODEL}"
-api_key          = "${OPENCODE_API_KEY}"
+api_key          = "${GLM_API_KEY}"
 
 [gateway]
 host              = "${GATEWAY_HOST}"
@@ -70,7 +72,6 @@ EOF
   esac
 
   if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "${TELEGRAM_ALLOWED_USER_ID:-}" ]]; then
-    # allow comma-separated ids so multiple users can DM the bot
     IFS=',' read -ra TG_USER_IDS <<< "${TELEGRAM_ALLOWED_USER_ID}"
     TG_USER_LIST=""
     for uid in "${TG_USER_IDS[@]}"; do
@@ -135,21 +136,21 @@ cat > "${WS_DIR}/USER.md" <<'EOF'
 - Role: CEO of a software company. Treat requests with the priority and
   discretion that implies.
 - Technical fluency is high; raw commands, logs, file paths, and code are
-  fine - no need to soften or pre-explain.
+  fine, no need to soften or pre-explain.
 - Time is the scarcest resource. Default to action over clarification.
 EOF
 
 chmod 600 "${WS_DIR}"/IDENTITY.md "${WS_DIR}"/SOUL.md "${WS_DIR}"/USER.md
 
-echo "[init-zen] wrote ${ZC_CONFIG}"
-echo "[init-zen] provider = opencode-zen  (https://opencode.ai/zen/v1)"
-echo "[init-zen] model    = ${DEFAULT_MODEL}"
-echo "[init-zen] gateway  = ${GATEWAY_HOST}:${GATEWAY_PORT}  (allow_public_bind = true)"
-echo "[init-zen] persona  = ${AGENT_NAME}  (IDENTITY/SOUL/USER.md written to ${WS_DIR})"
-echo "[init-zen] autonomy = ${AUTONOMY_LEVEL}"
+echo "[init-glm] wrote ${ZC_CONFIG}"
+echo "[init-glm] provider = anthropic-custom:${GLM_ENDPOINT}"
+echo "[init-glm] model    = ${DEFAULT_MODEL}"
+echo "[init-glm] gateway  = ${GATEWAY_HOST}:${GATEWAY_PORT}  (allow_public_bind = true)"
+echo "[init-glm] persona  = ${AGENT_NAME}  (IDENTITY/SOUL/USER.md written to ${WS_DIR})"
+echo "[init-glm] autonomy = ${AUTONOMY_LEVEL}"
 if [[ "${TG_WIRED}" == "1" ]]; then
-  echo "[init-zen] telegram = wired  (allowed_users = [${TG_USER_LIST}])"
+  echo "[init-glm] telegram = wired  (allowed_users = [${TG_USER_LIST}])"
 else
-  echo "[init-zen] telegram = skipped (set TELEGRAM_BOT_TOKEN + TELEGRAM_ALLOWED_USER_ID in .env to enable)"
+  echo "[init-glm] telegram = skipped (set TELEGRAM_BOT_TOKEN + TELEGRAM_ALLOWED_USER_ID in .env to enable)"
 fi
-echo "[init-zen] restart the container to pick up channel changes."
+echo "[init-glm] restart the container to pick up channel changes."
