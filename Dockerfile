@@ -1,16 +1,36 @@
 # syntax=docker/dockerfile:1.7
 
-FROM debian:bookworm-slim
-
-ARG TARGETARCH
-ARG ZEROCLAW_VERSION=v0.7.3
 ARG NODE_MAJOR=22
+ARG ZEROCLAW_VERSION=v0.7.3
+
+# ---------- stage 1: build the React dashboard from zeroclaw source ----------
+FROM node:${NODE_MAJOR}-bookworm-slim AS web-build
+ARG ZEROCLAW_VERSION
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+RUN curl -fsSL "https://github.com/zeroclaw-labs/zeroclaw/archive/refs/tags/${ZEROCLAW_VERSION}.tar.gz" \
+      | tar -xz --strip-components=1
+
+WORKDIR /build/web
+RUN npm ci && npm run build
+# produces /build/web/dist
+
+# ---------- stage 2: runtime ----------
+FROM debian:bookworm-slim
+ARG TARGETARCH
+ARG ZEROCLAW_VERSION
+ARG NODE_MAJOR
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PATH="/usr/local/bin:${PATH}" \
     ZEROCLAW_HOME=/root/.zeroclaw \
     CLAUDE_HOME=/root/.claude \
-    WORKSPACE=/workspace
+    WORKSPACE=/workspace \
+    ZEROCLAW_WEB_DIST_DIR=/opt/zeroclaw/web-dist
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
@@ -54,6 +74,8 @@ RUN set -eux; \
     install -m 0755 "$(find . -maxdepth 3 -type f -name zeroclaw | head -n1)" /usr/local/bin/zeroclaw; \
     rm -rf /tmp/zeroclaw* /tmp/SHA256SUMS; \
     zeroclaw --version
+
+COPY --from=web-build /build/web/dist /opt/zeroclaw/web-dist
 
 COPY scripts/init-zen.sh /usr/local/bin/init-zen.sh
 RUN chmod +x /usr/local/bin/init-zen.sh
