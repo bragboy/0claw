@@ -36,6 +36,21 @@ provider_retries    = 2
 provider_backoff_ms = 500
 EOF
 
+  if [[ -n "${BRAVE_API_KEY:-}" ]]; then
+    cat <<EOF
+
+[web_search]
+enabled       = true
+provider      = "brave"
+brave_api_key = "${BRAVE_API_KEY}"
+max_results   = 5
+timeout_secs  = 20
+EOF
+    WS_WIRED=1
+  else
+    WS_WIRED=0
+  fi
+
   case "${AUTONOMY_LEVEL}" in
     full)
       cat <<EOF
@@ -148,6 +163,11 @@ echo "[init-glm] model    = ${DEFAULT_MODEL}"
 echo "[init-glm] gateway  = ${GATEWAY_HOST}:${GATEWAY_PORT}  (allow_public_bind = true)"
 echo "[init-glm] persona  = ${AGENT_NAME}  (IDENTITY/SOUL/USER.md written to ${WS_DIR})"
 echo "[init-glm] autonomy = ${AUTONOMY_LEVEL}"
+if [[ "${WS_WIRED}" == "1" ]]; then
+  echo "[init-glm] websearch = brave  (BRAVE_API_KEY present)"
+else
+  echo "[init-glm] websearch = disabled (set BRAVE_API_KEY in .env to enable)"
+fi
 if [[ "${TG_WIRED}" == "1" ]]; then
   echo "[init-glm] telegram = wired  (allowed_users = [${TG_USER_LIST}])"
 else
