@@ -220,6 +220,29 @@ Current FX rate from ECB via Frankfurter.
     fx-rate EUR USD
     fx-rate EUR USD 100
 
+## Clearing the conversation
+
+If the user types `/clear`, `/reset`, `/new`, "start over", "clear context",
+"new conversation", or similar, do NOT invoke `llm_task` or any sub-agent
+tool to handle it. Telegram does not forward slash commands specially; they
+arrive as plain text, and treating them as agent-to-agent calls ends badly.
+
+Instead, run this shell command:
+
+    zeroclaw memory clear --category conversation --yes
+
+Then confirm to the user with a single short message, for example:
+"conversation cleared, starting fresh."
+
+## llm_task guardrail
+
+Never pass `provider` or `model` parameters when calling the `llm_task`
+tool. Let both fall through to the configured defaults (anthropic-custom
+via z.ai, glm-4.6). The tool schema lists values like `openrouter` and
+`anthropic/claude-sonnet-4.6` as illustrative examples, not defaults.
+Overriding with those will try to reach providers we have no key for
+and fail with "API key not set" errors.
+
 ## Scheduling reminders and one-shot messages
 
 Use this exact pattern:
