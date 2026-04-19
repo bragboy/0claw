@@ -252,16 +252,22 @@ reminder:
       "name": "<short label>",
       "schedule": {"kind": "at", "at": "<UTC ISO 8601>"},
       "job_type": "shell",
-      "command": "echo \"<exact reminder text>\"",
-      "delivery": {"mode": "announce", "channel": "telegram", "to": "<sender chat_id>"}
+      "command": "zeroclaw channel send \"<exact reminder text>\" --channel-id telegram --recipient <sender chat_id>"
     }
+
+Do NOT set the `delivery` parameter. The `delivery: announce` mode dumps
+the full shell execution envelope to Telegram (`status=... stdout:\n...
+stderr:`), which looks unprofessional. Instead, let the shell command
+itself call `zeroclaw channel send`, which delivers one clean message
+with just the literal text and no envelope noise.
 
 Hard rules, in order of damage if broken:
 
-1. `delivery` is REQUIRED. Without it, the shell output writes to the
-   container's stdout and nothing reaches the user. `channel: "telegram"`,
-   `to: <sender chat_id>`. The chat_id is the numeric Telegram user id
-   of whoever sent the current message (same as the allowed_users list).
+1. The `command` must invoke `zeroclaw channel send ... --channel-id
+   telegram --recipient <chat_id>` directly. `echo` alone delivers
+   nothing. `echo` with `delivery: announce` delivers ugly envelope
+   output. Only the direct `channel send` pattern produces a clean
+   reminder.
 
 2. `at` MUST be ISO 8601 UTC. You have to convert the user's local time
    yourself. The user's local zone is given in USER.md. For Europe/Madrid
@@ -269,26 +275,28 @@ Hard rules, in order of damage if broken:
    it is UTC+1. For "9:05 PM Madrid" in April that is `19:05:00Z`, not
    `21:05:00Z`. `at` does NOT support a `tz` field; do not add one.
 
-3. Use `job_type: "shell"` with a simple `echo`, NOT `job_type: "agent"`.
-   Agent-type jobs re-invoke the full agent loop at fire time and each
-   internal tool iteration emits its own Telegram message, so a single
-   reminder arrives as three or four redundant messages.
+3. Use `job_type: "shell"`, NOT `job_type: "agent"`. Agent-type jobs
+   re-invoke the full agent loop at fire time and each internal tool
+   iteration emits its own Telegram message, so a single reminder arrives
+   as three or four redundant messages.
 
 4. For recurring schedules use `{"kind": "cron", "expr": "<5-field cron>", "tz": "<IANA zone>"}`.
    `tz` works on `kind: "cron"` only, never on `kind: "at"`.
 
-Worked example for "remind me at 9:05 PM to have supplements" from a user
-whose chat_id is `100116514` and timezone is Europe/Madrid, in April:
+5. `chat_id` for Telegram is the numeric sender id of whoever is talking
+   to you now. Pull it from the incoming message metadata, do not guess.
+
+Worked example for "remind me at 9:13 PM to take supplements" from a
+user whose chat_id is `100116514` and timezone is Europe/Madrid, April:
 
     {
       "name": "Supplements reminder",
-      "schedule": {"kind": "at", "at": "2026-04-19T19:05:00Z"},
+      "schedule": {"kind": "at", "at": "2026-04-19T19:13:00Z"},
       "job_type": "shell",
-      "command": "echo \"Time to have your supplements\"",
-      "delivery": {"mode": "announce", "channel": "telegram", "to": "100116514"}
+      "command": "zeroclaw channel send \"Time to take your supplements\" --channel-id telegram --recipient 100116514"
     }
 
-(9:05 PM Madrid in April is CEST which is UTC+2, so UTC is 19:05:00Z.)
+(9:13 PM Madrid in April is CEST which is UTC+2, so UTC is 19:13:00Z.)
 
 Daily recurring example, weekdays at 9 AM Madrid:
 
@@ -296,8 +304,7 @@ Daily recurring example, weekdays at 9 AM Madrid:
       "name": "Morning standup",
       "schedule": {"kind": "cron", "expr": "0 9 * * 1-5", "tz": "Europe/Madrid"},
       "job_type": "shell",
-      "command": "echo \"Morning, standup in 15\"",
-      "delivery": {"mode": "announce", "channel": "telegram", "to": "100116514"}
+      "command": "zeroclaw channel send \"Morning, standup in 15\" --channel-id telegram --recipient 100116514"
     }
 
 ## Research flow
