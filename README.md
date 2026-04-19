@@ -104,6 +104,17 @@ You can also smoke-test the GLM key without the container:
   ```
 - Persistent state lives in `./config/zeroclaw` and `./config/claude`. Back these up to preserve memory, channel bindings, and approvals.
 
+### Live data shell helpers (baked into the image)
+
+Anything time-sensitive (news, prices, FX) should go through these instead of the built-in `web_search` tool, which returns cached crawl snippets and is unreliable for current numbers. The agent discovers them via the auto-injected `TOOLS.md`, but you can invoke them yourself inside the container:
+
+```bash
+docker compose exec zeroclaw-hub news-search "meta layoffs" pd    # past-day news via Brave News
+docker compose exec zeroclaw-hub crypto-price BTC USD             # Binance spot
+docker compose exec zeroclaw-hub stock-price AAPL                 # Yahoo last trade
+docker compose exec zeroclaw-hub fx-rate EUR USD 100              # Frankfurter/ECB
+```
+
 ### Picking a different model
 
 `init-glm.sh` defaults to `glm-4.6`. To change globally, set `ZEROCLAW_DEFAULT_MODEL` in `.env` and re-run:
@@ -155,6 +166,71 @@ docker compose up -d                               # re-reads env_file, also ref
 docker compose exec zeroclaw-hub init-glm.sh       # rewrites config.toml
 docker compose restart zeroclaw-hub
 ```
+
+---
+
+## 6. Remote deployment
+
+`deploy.rb` is a zero-dependency Ruby script that drives all remote ops over SSH. The target VM is configured at the top of the file.
+
+```bash
+# First-time setup on the VM (clones repo, copies .env once, builds, brings up)
+ruby deploy.rb bootstrap
+
+# Standard deploy loop (checks local tree is clean + pushed, then pulls + rebuilds remote)
+ruby deploy.rb
+
+# Observability
+ruby deploy.rb status           # remote docker compose ps + zeroclaw status
+ruby deploy.rb logs             # tail remote daemon logs
+ruby deploy.rb ssh              # drop into a shell inside the repo dir on the VM
+
+# Control
+ruby deploy.rb env-refresh      # overwrite remote .env with your current local .env + restart
+ruby deploy.rb down             # stop the remote container
+```
+
+Safety defaults:
+
+- Standard `deploy` refuses to run if your local tree has uncommitted changes or if local is ahead of `origin/main`. Override with `ALLOW_DIRTY=1 ruby deploy.rb`.
+- `bootstrap` copies `.env` to the VM only if the VM has no `.env` yet. To force-overwrite later, use `env-refresh`.
+- The container has `restart: unless-stopped`, and the VM's Docker daemon is enabled at boot, so the agent comes back automatically after a VM reboot. No extra systemd unit is needed.
+
+### VM preflight (one-time, before first `bootstrap`)
+
+Before running `deploy.rb bootstrap`, make sure the VM has:
+
+- A recent Docker Engine (`docker --version`).
+- The Docker Compose V2 plugin (`docker compose version`). On hosts where `apt-get install docker-compose-plugin` doesn't work (old or EOL Ubuntu releases), grab the static binary directly:
+  ```bash
+  sudo mkdir -p /usr/local/lib/docker/cli-plugins
+  sudo curl -fsSL -o /usr/local/lib/docker/cli-plugins/docker-compose \
+    https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64
+  sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+  ```
+- Enough RAM + swap. On a 1 GB VM, add a 1 GB swap file:
+  ```bash
+  sudo fallocate -l 1G /swapfile && sudo chmod 600 /swapfile
+  sudo mkswap /swapfile && sudo swapon /swapfile
+  echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+  ```
+- The deploy user in the `docker` group (`groups` should include `docker`).
+
+---
+
+## 7. Dashboard access (SSH tunnel)
+
+The gateway listens on `0.0.0.0:42617` inside the container, but the VM does not expose that port publicly. To reach the web dashboard from your laptop:
+
+```bash
+# via deploy.rb (convenience):
+ruby deploy.rb tunnel
+
+# or raw ssh:
+ssh -N -L 42617:localhost:42617 deploy@francium.tech
+```
+
+While the tunnel is up, open <http://localhost:42617> in your browser. Ctrl-C the tunnel when done. Nothing is exposed to the public internet; everything rides the existing SSH connection.
 
 ---
 
