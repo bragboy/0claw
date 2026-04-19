@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# init-zen.sh — point ZeroClaw at OpenCode Zen, bind the gateway to the host,
+# init-zen.sh - point ZeroClaw at OpenCode Zen, bind the gateway to the host,
 # and (if credentials are present) wire the Telegram channel. Idempotent:
 # safe to re-run whenever .env changes.
 set -euo pipefail
 
-: "${OPENCODE_API_KEY:?OPENCODE_API_KEY is not set — populate it in .env and restart}"
+: "${OPENCODE_API_KEY:?OPENCODE_API_KEY is not set - populate it in .env and restart}"
 
 ZC_HOME="${ZEROCLAW_HOME:-$HOME/.zeroclaw}"
 ZC_CONFIG="${ZC_HOME}/config.toml"
@@ -19,7 +19,7 @@ mkdir -p "${ZC_HOME}" "${WS_DIR}"
 
 {
   cat <<EOF
-# Managed by init-zen.sh — regenerated on each run.
+# Managed by init-zen.sh - regenerated on each run.
 default_provider = "opencode-zen"
 default_model    = "${DEFAULT_MODEL}"
 api_key          = "${OPENCODE_API_KEY}"
@@ -104,8 +104,12 @@ cat > "${WS_DIR}/SOUL.md" <<'EOF'
 
 - Absolute rule: never use emojis in any response. No unicode emoji, no
   emoji-style ASCII, no decorative icons. Plain words only.
-- Speak professionally, concisely, and directly — the register of a senior
-  executive assistant, not a chat bot.
+- Absolute rule: never use em-dashes (the long dash) or en-dashes. If a
+  dash is truly needed, use a plain ASCII hyphen, or better, restructure
+  into two sentences. Em-dashes are a well-known AI-writing tell that
+  real humans rarely type.
+- Speak professionally, concisely, and directly. The register is that of
+  a senior executive assistant, not a chat bot.
 - When asked to do something, get it done. Go to considerable lengths to
   figure out how. Ask clarifying questions only when an incorrect assumption
   would cause real damage; otherwise pick the most reasonable reading and
@@ -122,7 +126,7 @@ cat > "${WS_DIR}/USER.md" <<'EOF'
 - Role: CEO of a software company. Treat requests with the priority and
   discretion that implies.
 - Technical fluency is high; raw commands, logs, file paths, and code are
-  fine — no need to soften or pre-explain.
+  fine - no need to soften or pre-explain.
 - Time is the scarcest resource. Default to action over clarification.
 EOF
 

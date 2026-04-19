@@ -1,4 +1,4 @@
-# CLAUDE.md — guidance for agents working in this repo
+# CLAUDE.md - guidance for agents working in this repo
 
 ## Project
 
@@ -10,7 +10,7 @@ See [README.md](README.md) for the user-facing setup flow.
 
 ## Commit conventions
 
-- **Do not add `Co-Authored-By: Claude …` (or any Claude/Anthropic trailer) to commit messages.** Author commits as the user only. This overrides the default Claude Code behavior — apply it without being reminded.
+- **Do not add `Co-Authored-By: Claude …` (or any Claude/Anthropic trailer) to commit messages.** Author commits as the user only. This overrides the default Claude Code behavior - apply it without being reminded.
 - Use HEREDOCs for multi-line commit bodies.
 - Prefer new commits over amends once something has been pushed.
 
