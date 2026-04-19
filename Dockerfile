@@ -77,8 +77,16 @@ RUN set -eux; \
 
 COPY --from=web-build /build/web/dist /opt/zeroclaw/web-dist
 
-COPY scripts/init-glm.sh /usr/local/bin/init-glm.sh
-RUN chmod +x /usr/local/bin/init-glm.sh
+COPY scripts/init-glm.sh      /usr/local/bin/init-glm.sh
+COPY scripts/news-search.sh   /usr/local/bin/news-search
+COPY scripts/crypto-price.sh  /usr/local/bin/crypto-price
+COPY scripts/stock-price.sh   /usr/local/bin/stock-price
+COPY scripts/fx-rate.sh       /usr/local/bin/fx-rate
+RUN chmod +x /usr/local/bin/init-glm.sh \
+             /usr/local/bin/news-search \
+             /usr/local/bin/crypto-price \
+             /usr/local/bin/stock-price \
+             /usr/local/bin/fx-rate
 
 RUN mkdir -p "${ZEROCLAW_HOME}" "${CLAUDE_HOME}" "${WORKSPACE}"
 

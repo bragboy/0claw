@@ -111,6 +111,14 @@ EOF
 
 chmod 600 "${ZC_CONFIG}"
 
+# ZeroClaw's shell tool scrubs env vars before running subprocesses, so baked-
+# in helpers (news-search, etc.) don't inherit BRAVE_API_KEY at runtime.
+# Write a sideload file they can source when their env var is missing.
+{
+  [[ -n "${BRAVE_API_KEY:-}" ]] && echo "export BRAVE_API_KEY='${BRAVE_API_KEY}'"
+} > "${ZC_HOME}/env"
+chmod 600 "${ZC_HOME}/env"
+
 # --- persona: workspace bootstrap files injected into the system prompt ---
 # ZeroClaw loads IDENTITY.md, SOUL.md, USER.md (and others) from the workspace
 # and prepends them to every conversation. Only the name is env-driven; the
@@ -143,6 +151,14 @@ cat > "${WS_DIR}/SOUL.md" <<'EOF'
   throat-clearing, no unsolicited summaries of what you are about to do.
 - Do not close replies with rhetorical offers like "let me know if you need
   anything else". Finish the task and stop.
+- For CURRENT information (news, today's anything, live numbers) the
+  default web_search tool returns cached crawl snippets that are often
+  days stale. Never quote a date, price, or claim as "current" from a
+  web_search snippet alone. Use the shell helpers documented in TOOLS.md
+  (news-search, crypto-price, stock-price, fx-rate). For deeper reading
+  after discovering URLs, use web_fetch to pull live HTML. If the best
+  result is older than the user's stated window, say so plainly rather
+  than papering over.
 EOF
 
 cat > "${WS_DIR}/USER.md" <<'EOF'
@@ -155,7 +171,60 @@ cat > "${WS_DIR}/USER.md" <<'EOF'
 - Time is the scarcest resource. Default to action over clarification.
 EOF
 
-chmod 600 "${WS_DIR}"/IDENTITY.md "${WS_DIR}"/SOUL.md "${WS_DIR}"/USER.md
+cat > "${WS_DIR}/TOOLS.md" <<'EOF'
+# Shell helpers available in this environment
+
+These are baked into the image and always available via shell. Prefer them
+over the built-in web_search tool whenever the answer depends on current
+data. web_search returns cached crawl snippets and is unsafe for anything
+time-sensitive.
+
+## news-search QUERY [FRESHNESS]
+
+Current news via Brave's news index with an explicit freshness filter.
+Returns title, publication date, source, URL, and summary per article.
+
+FRESHNESS: pd (past day, default), pw (past week), pm (past month)
+
+    news-search "meta layoffs"
+    news-search "tesla earnings" pw
+
+Use this for news, announcements, breaking developments, or any
+"latest / today / this week" question. If past-day returns nothing,
+widen to pw or pm and say so.
+
+## crypto-price SYMBOL [QUOTE]
+
+Live spot price from Binance.
+
+    crypto-price BTC
+    crypto-price ETH USD
+    crypto-price SOL USDC
+
+## stock-price TICKER
+
+Last trade price from Yahoo Finance.
+
+    stock-price AAPL
+    stock-price TSLA
+
+## fx-rate FROM TO [AMOUNT]
+
+Current FX rate from ECB via Frankfurter.
+
+    fx-rate EUR USD
+    fx-rate EUR USD 100
+
+## Research flow
+
+For research that goes beyond a headline, use web_search to discover URLs,
+then web_fetch on the chosen URL to read live HTML. Never quote numbers
+or dates from a web_search snippet without verifying via web_fetch or one
+of the dedicated helpers above. If a source is unreachable or the content
+looks stale, say so plainly.
+EOF
+
+chmod 600 "${WS_DIR}"/IDENTITY.md "${WS_DIR}"/SOUL.md "${WS_DIR}"/USER.md "${WS_DIR}"/TOOLS.md
 
 echo "[init-glm] wrote ${ZC_CONFIG}"
 echo "[init-glm] provider = anthropic-custom:${GLM_ENDPOINT}"
