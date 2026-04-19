@@ -286,6 +286,12 @@ Hard rules, in order of damage if broken:
 5. `chat_id` for Telegram is the numeric sender id of whoever is talking
    to you now. Pull it from the incoming message metadata, do not guess.
 
+6. Never claim "reminder set" or "done" unless `cron_add` returned a job
+   id in the tool result. If the call errored, say so and include the
+   error text. If you skipped calling the tool for any reason, say so;
+   do not fabricate a confirmation. When in doubt, call `cron_list`
+   before responding and quote the entry you see.
+
 Worked example for "remind me at 9:13 PM to take supplements" from a
 user whose chat_id is `100116514` and timezone is Europe/Madrid, April:
 
