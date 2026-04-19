@@ -16,6 +16,7 @@ GATEWAY_HOST="${ZEROCLAW_GATEWAY_HOST:-0.0.0.0}"
 GATEWAY_PORT="${ZEROCLAW_GATEWAY_PORT:-42617}"
 AGENT_NAME="${AGENT_NAME:-Reshma}"
 AUTONOMY_LEVEL="${AUTONOMY_LEVEL:-supervised}"
+USER_TIMEZONE="${USER_TIMEZONE:-UTC}"
 
 mkdir -p "${ZC_HOME}" "${WS_DIR}"
 
@@ -161,11 +162,15 @@ cat > "${WS_DIR}/SOUL.md" <<'EOF'
   than papering over.
 EOF
 
-cat > "${WS_DIR}/USER.md" <<'EOF'
+cat > "${WS_DIR}/USER.md" <<EOF
 # The user
 
 - Role: CEO of a software company. Treat requests with the priority and
   discretion that implies.
+- Local timezone: \`${USER_TIMEZONE}\` (IANA zone). When the user gives a
+  time without an explicit zone, assume this one. When scheduling a cron
+  job, always pass \`--tz ${USER_TIMEZONE}\`. Never ask them to repeat
+  their timezone.
 - Technical fluency is high; raw commands, logs, file paths, and code are
   fine, no need to soften or pre-explain.
 - Time is the scarcest resource. Default to action over clarification.
@@ -259,6 +264,7 @@ echo "[init-glm] provider = anthropic-custom:${GLM_ENDPOINT}"
 echo "[init-glm] model    = ${DEFAULT_MODEL}"
 echo "[init-glm] gateway  = ${GATEWAY_HOST}:${GATEWAY_PORT}  (allow_public_bind = true)"
 echo "[init-glm] persona  = ${AGENT_NAME}  (IDENTITY/SOUL/USER.md written to ${WS_DIR})"
+echo "[init-glm] timezone = ${USER_TIMEZONE}"
 echo "[init-glm] autonomy = ${AUTONOMY_LEVEL}"
 if [[ "${WS_WIRED}" == "1" ]]; then
   echo "[init-glm] websearch = brave  (BRAVE_API_KEY present)"
