@@ -70,12 +70,21 @@ EOF
   esac
 
   if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "${TELEGRAM_ALLOWED_USER_ID:-}" ]]; then
+    # allow comma-separated ids so multiple users can DM the bot
+    IFS=',' read -ra TG_USER_IDS <<< "${TELEGRAM_ALLOWED_USER_ID}"
+    TG_USER_LIST=""
+    for uid in "${TG_USER_IDS[@]}"; do
+      uid="${uid// /}"
+      [[ -z "$uid" ]] && continue
+      [[ -n "$TG_USER_LIST" ]] && TG_USER_LIST+=", "
+      TG_USER_LIST+="\"${uid}\""
+    done
     cat <<EOF
 
 [channels_config.telegram]
 enabled       = true
 bot_token     = "${TELEGRAM_BOT_TOKEN}"
-allowed_users = ["${TELEGRAM_ALLOWED_USER_ID}"]
+allowed_users = [${TG_USER_LIST}]
 mention_only  = false
 EOF
     TG_WIRED=1
@@ -139,7 +148,7 @@ echo "[init-zen] gateway  = ${GATEWAY_HOST}:${GATEWAY_PORT}  (allow_public_bind 
 echo "[init-zen] persona  = ${AGENT_NAME}  (IDENTITY/SOUL/USER.md written to ${WS_DIR})"
 echo "[init-zen] autonomy = ${AUTONOMY_LEVEL}"
 if [[ "${TG_WIRED}" == "1" ]]; then
-  echo "[init-zen] telegram = wired  (allowed_users = [${TELEGRAM_ALLOWED_USER_ID}])"
+  echo "[init-zen] telegram = wired  (allowed_users = [${TG_USER_LIST}])"
 else
   echo "[init-zen] telegram = skipped (set TELEGRAM_BOT_TOKEN + TELEGRAM_ALLOWED_USER_ID in .env to enable)"
 fi
