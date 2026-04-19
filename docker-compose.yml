@@ -1,0 +1,24 @@
+services:
+  zeroclaw-hub:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: zeroclaw-hub:local
+    container_name: zeroclaw-hub
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "42617:42617"
+    volumes:
+      - ./config/zeroclaw:/root/.zeroclaw
+      - ./config/claude:/root/.claude
+      - ./workspace:/workspace
+    stdin_open: true
+    tty: true
+    healthcheck:
+      test: ["CMD-SHELL", "zeroclaw status >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

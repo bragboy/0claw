@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+
+config/zeroclaw/*
+config/claude/*
+workspace/*
+!config/zeroclaw/.gitkeep
+!config/claude/.gitkeep
+!workspace/.gitkeep
+
+.DS_Store
+*.log
