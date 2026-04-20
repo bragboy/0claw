@@ -1,6 +1,6 @@
 # 0claw - 24/7 AI Automation Hub
 
-<img src="assets/Rebecca.png" alt="Rebecca" width="360" />
+<img src="assets/Rebecca.png" alt="Rebecca" width="100%" />
 
 **Meet Rebecca.** The default persona is a concise executive assistant: no emojis, no em-dashes, no chatbot fluff. She runs 24/7 in the container, answers Telegram messages from the allowlist, schedules reminders that fetch live data at fire time, and finishes tasks instead of offering to help with them. Her voice lives in `SOUL.md`; her name is the only bit you swap through `.env`.
 
