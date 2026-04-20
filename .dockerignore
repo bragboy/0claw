@@ -12,6 +12,7 @@ workspace/
 deploy.rb
 CLAUDE.md
 README.md
+assets/
 
 # Noise.
 *.log
