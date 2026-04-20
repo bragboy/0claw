@@ -343,6 +343,15 @@ Hard rules for this path:
    `price`), `stock-price`, `fx-rate`. `which <helper>` inside the
    container will confirm the exact path if you are unsure.
 
+4. NEVER set the `delivery` parameter on a cron_add that uses
+   do-task. do-task already delivers the synthesized reply via
+   `zeroclaw channel send` internally. If you ALSO set
+   `delivery: {mode: "announce", ...}` the user receives TWO
+   messages at fire time: the clean reply from do-task, and a
+   second message containing the shell envelope
+   (`status=exit status: 0 / stdout: ... / stderr:`) with raw
+   tracing logs inside. Leave the delivery field out entirely.
+
 Examples, all times are arbitrary and unrelated to morning:
 
     # one-shot weather snapshot at 3 PM Madrid
