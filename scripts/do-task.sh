@@ -56,8 +56,9 @@ Strict rules for this execution:
 - Keep it compact: a few short paragraphs at most, often less."
 
 # CLI agent path returns ONE synthesized reply (unlike the channel agent
-# path which narrates). Strip ANSI color codes on the way out.
-RESPONSE=$(zeroclaw agent -m "$PROMPT" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
+# path which narrates). `RUST_LOG=error` suppresses the tracing INFO lines
+# that would otherwise pollute stdout. Strip ANSI color codes just in case.
+RESPONSE=$(RUST_LOG=error zeroclaw agent -m "$PROMPT" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
 
 if [[ -z "$RESPONSE" ]]; then
   RESPONSE="(the deferred task returned no content; try sending the instruction again)"
