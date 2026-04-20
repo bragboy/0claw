@@ -1,0 +1,18 @@
+# Runtime state and secrets, must never enter the build context.
+.env
+.env.*
+!.env.example
+config/
+workspace/
+
+# Repo metadata and developer tooling not needed at runtime.
+.git/
+.gitignore
+.dockerignore
+deploy.rb
+CLAUDE.md
+README.md
+
+# Noise.
+*.log
+.DS_Store
