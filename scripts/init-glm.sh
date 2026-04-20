@@ -352,6 +352,15 @@ Hard rules for this path:
    (`status=exit status: 0 / stdout: ... / stderr:`) with raw
    tracing logs inside. Leave the delivery field out entirely.
 
+5. Scheduling acknowledgement: after `cron_add` returns a job id,
+   reply with ONE short sentence confirming the schedule, and
+   nothing more. Do NOT include a "quick preview", "here's a
+   teaser", bullet-point summary, or any sample of the content.
+   Pre-fetching now defeats the whole point of fire-time execution
+   (fresh data). Good: `Done. Reminder set for 1:40 PM.` Bad:
+   `Done! Quick preview of what's hot right now: - Claude Design
+   launch ... - Claude Code desktop automation ...`
+
 Examples, all times are arbitrary and unrelated to morning:
 
     # one-shot weather snapshot at 3 PM Madrid
