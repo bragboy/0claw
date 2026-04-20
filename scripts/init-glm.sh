@@ -305,6 +305,26 @@ scheduling time. Schedule the instruction, not the answer. Use
       "command": "do-task <chat_id> '<plain-English instruction of what to fetch and deliver>'"
     }
 
+Hard rules for this path:
+
+1. ONE cron job per user request. If the user asks for "weather AND
+   news AND a greeting" at 10 AM, create ONE cron with ONE do-task
+   whose instruction bundles all three. Never split into multiple
+   cron jobs scheduled back-to-back; each job runs independently and
+   the user gets several disjointed messages.
+
+2. Inside the instruction string you may name helpers the agent can
+   use at fire time (weather-for, news-search, crypto-price, etc.)
+   but do NOT write raw shell pipelines in the cron command. Only
+   `do-task <chat_id> '<instruction>'` belongs in the command field.
+   If you need a raw shell command for a static reminder, use
+   pattern A above.
+
+3. Helper names must be exact: `weather-for` (not `weather`),
+   `news-search` (not `news`), `crypto-price` (not `crypto` or
+   `price`), `stock-price`, `fx-rate`. `which <helper>` inside the
+   container will confirm the exact path if you are unsure.
+
 Examples, all times are arbitrary and unrelated to morning:
 
     # one-shot weather snapshot at 3 PM Madrid
@@ -323,6 +343,30 @@ The agent at fire time reads the instruction you passed to do-task,
 fetches whatever live data it needs (at that moment, with "now" meaning
 the fire time), and returns one synthesized reply. do-task then
 delivers that reply as a single Telegram message.
+
+### C. Computing the UTC `at` field correctly
+
+The `at` field for `kind: "at"` schedules MUST be UTC ISO 8601. The
+user's local timezone is in USER.md. You have two options, in order
+of preference:
+
+1. Mental conversion using USER.md offsets. For Europe/Madrid:
+   April-October (CEST, UTC+2): subtract 2 hours from local.
+   November-March (CET,  UTC+1): subtract 1 hour from local.
+   10:00 Madrid in April -> 08:00 UTC -> `"2026-04-20T08:00:00Z"`.
+
+2. Shell computation with the EXACT pattern (note the `-u` flag):
+
+       TZ=Europe/Madrid date -d 'today 10:00' -u '+%Y-%m-%dT%H:%M:%SZ'
+
+   Without `-u` the output stays in the TZ's local time even though
+   the `Z` suffix in the format string makes it LOOK like UTC. This
+   was the actual bug behind an earlier mis-scheduled job that fired
+   two hours late. Always include `-u`.
+
+Sanity check: after computing, the UTC hour should be lower than the
+local hour (for Europe/Madrid, by 1 or 2 hours depending on season).
+If your UTC hour equals the local hour the conversion is wrong.
 
 Hard rules, in order of damage if broken:
 
