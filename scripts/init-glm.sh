@@ -220,6 +220,32 @@ Current FX rate from ECB via Frankfurter.
     fx-rate EUR USD
     fx-rate EUR USD 100
 
+## weather-for LOCATION
+
+Current weather for a location via wttr.in (no key). Returns a one-line
+summary with condition, temperature, feels-like, humidity, and wind.
+
+    weather-for "Tres Cantos"
+    weather-for Madrid
+
+## do-task CHAT_ID "<instruction>"
+
+Deferred instruction executor. Intended exclusively as the `command`
+inside a scheduled cron job when the reminder's content depends on live
+data. Runs the ZeroClaw CLI agent with the instruction as a fresh prompt
+AT FIRE TIME, captures the synthesized reply, and sends it to the given
+Telegram chat as one clean message.
+
+    do-task 100116514 "Give me Tres Cantos weather right now"
+    do-task 100116514 "Top 3 Claude Code AI headlines from the past day"
+    do-task 100116514 "NVDA price, BTC price, and EUR/USD one-liners"
+
+At fire time "now" is literally now, so the agent fetches fresh data
+using the helpers above (weather-for, news-search, crypto-price, etc.)
+and returns a single synthesized text response. The calling script
+handles the Telegram delivery; the agent must not try to send the
+message itself.
+
 ## Clearing the conversation
 
 If the user types `/clear`, `/reset`, `/new`, "start over", "clear context",
@@ -245,8 +271,13 @@ and fail with "API key not set" errors.
 
 ## Scheduling reminders and one-shot messages
 
-Use the `cron_add` tool (JSON). The exact shape for a one-shot Telegram
-reminder:
+Two patterns depending on whether the reminder content is fixed or
+depends on live data.
+
+### A. Static-text reminder (content known at scheduling time)
+
+When the reminder is a fixed message the user already gave you
+("remind me to take supplements"), the `cron_add` shape is:
 
     {
       "name": "<short label>",
@@ -257,9 +288,41 @@ reminder:
 
 Do NOT set the `delivery` parameter. The `delivery: announce` mode dumps
 the full shell execution envelope to Telegram (`status=... stdout:\n...
-stderr:`), which looks unprofessional. Instead, let the shell command
-itself call `zeroclaw channel send`, which delivers one clean message
-with just the literal text and no envelope noise.
+stderr:`), which looks unprofessional. Let the shell command itself
+call `zeroclaw channel send`.
+
+### B. Dynamic reminder (content must be fetched at fire time)
+
+When the reminder needs live data (weather, news, today's prices,
+breaking headlines, anything that changes), never bake the text at
+scheduling time. Schedule the instruction, not the answer. Use
+`do-task`:
+
+    {
+      "name": "<short label>",
+      "schedule": {"kind": "at", "at": "<UTC ISO 8601>"},
+      "job_type": "shell",
+      "command": "do-task <chat_id> '<plain-English instruction of what to fetch and deliver>'"
+    }
+
+Examples, all times are arbitrary and unrelated to morning:
+
+    # one-shot weather snapshot at 3 PM Madrid
+    {"schedule": {"kind": "at", "at": "2026-04-20T13:00:00Z"},
+     "command": "do-task 100116514 'Weather in Tres Cantos right now'"}
+
+    # daily wake-up briefing at 6:35 AM Madrid
+    {"schedule": {"kind": "cron", "expr": "35 6 * * *", "tz": "Europe/Madrid"},
+     "command": "do-task 100116514 'Cheerful greeting, then Tres Cantos weather, then top 3 Claude Code AI news from past day'"}
+
+    # nightly market wrap at 11 PM Madrid weekdays
+    {"schedule": {"kind": "cron", "expr": "0 23 * * 1-5", "tz": "Europe/Madrid"},
+     "command": "do-task 100116514 'NVDA, MSFT, and BTC closing-price one-liners'"}
+
+The agent at fire time reads the instruction you passed to do-task,
+fetches whatever live data it needs (at that moment, with "now" meaning
+the fire time), and returns one synthesized reply. do-task then
+delivers that reply as a single Telegram message.
 
 Hard rules, in order of damage if broken:
 

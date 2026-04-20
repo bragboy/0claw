@@ -82,11 +82,15 @@ COPY scripts/news-search.sh   /usr/local/bin/news-search
 COPY scripts/crypto-price.sh  /usr/local/bin/crypto-price
 COPY scripts/stock-price.sh   /usr/local/bin/stock-price
 COPY scripts/fx-rate.sh       /usr/local/bin/fx-rate
+COPY scripts/weather-for.sh   /usr/local/bin/weather-for
+COPY scripts/do-task.sh       /usr/local/bin/do-task
 RUN chmod +x /usr/local/bin/init-glm.sh \
              /usr/local/bin/news-search \
              /usr/local/bin/crypto-price \
              /usr/local/bin/stock-price \
-             /usr/local/bin/fx-rate
+             /usr/local/bin/fx-rate \
+             /usr/local/bin/weather-for \
+             /usr/local/bin/do-task
 
 RUN mkdir -p "${ZEROCLAW_HOME}" "${CLAUDE_HOME}" "${WORKSPACE}"
 
