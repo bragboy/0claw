@@ -87,8 +87,18 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Node's fetch() auto-decompresses, so the body bytes we forward are
+  // uncompressed regardless of the upstream's Content-Encoding header. Drop
+  // encoding/length headers that no longer match the actual payload, and
+  // let Node re-chunk on its own. (Without this, ZeroClaw sees
+  // `content-encoding: br` over already-decoded JSON and bails with
+  // "error decoding response body".)
   const respHeaders = {};
-  for (const [k, v] of upstreamRes.headers) respHeaders[k] = v;
+  for (const [k, v] of upstreamRes.headers) {
+    const lk = k.toLowerCase();
+    if (lk === 'content-encoding' || lk === 'content-length' || lk === 'transfer-encoding') continue;
+    respHeaders[k] = v;
+  }
   res.writeHead(upstreamRes.status, respHeaders);
 
   if (upstreamRes.body) {
