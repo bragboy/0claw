@@ -62,7 +62,11 @@ Strict rules for this execution:
   news-search, crypto-price, stock-price, fx-rate) or web_fetch. Do not
   fall back on cached or pre-trained knowledge for current facts.
 - Return ONLY the final content as plain text, ready to show the user.
-  No preamble like 'Here is' or 'I have fetched'. No trailing offers.
+  No preamble. Do not narrate your plan. Do not write 'Let me fetch X',
+  'I'll start by Y', 'Here is', 'I have fetched', 'First, I'll', or any
+  sentence that announces what you are about to do. Open with the actual
+  content (e.g. 'Good morning!' or the first headline). No trailing
+  offers like 'let me know if you need more'.
 - CRITICAL: Delivery is handled by the caller. DO NOT invoke 'zeroclaw',
   'zeroclaw channel send', or any Telegram tool. The zeroclaw CLI is
   intentionally blocked in this sandbox and will exit with status 42 if
@@ -78,6 +82,13 @@ Strict rules for this execution:
 # stub doesn't shadow us. `RUST_LOG=error` suppresses tracing INFO lines
 # that would otherwise pollute stdout; strip ANSI color codes just in case.
 RESPONSE=$(PATH="$STUB_DIR:$PATH" RUST_LOG=error /usr/local/bin/zeroclaw agent -m "$PROMPT" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
+
+# Strip leading tool-call narration even though the prompt forbids it. The
+# inner agent still leaks 'Let me fetch X.' / 'I'll start by Y.' style
+# preambles, sometimes duplicated when it kicks off parallel tool calls.
+# Iteratively shave such sentences from the start of the response until we
+# hit real content.
+RESPONSE=$(printf '%s' "$RESPONSE" | sed -E ':a;s/^[[:space:]]*((Let me|I'\''ll|I will|First[, ]+I'\''ll|First[, ]+I will|Now[, ]+I'\''ll|Now[, ]+I will|Let me start by|Let me begin by) [^.!?]*[.!?])[[:space:]]*//;ta')
 
 # Belt and suspenders: if the inner agent somehow still pasted a shell
 # envelope into its reply, do not forward it to the user as if it were
