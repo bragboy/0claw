@@ -3,10 +3,19 @@
 ## Project
 
 `0claw` is a Dockerized 24/7 AI automation hub: a single ZeroClaw daemon
-backed by DeepSeek (`deepseek-v4-flash`, thinking-disabled for cost) via
-its Anthropic-compatible endpoint, chatting over Telegram, with the
-`claude-code` and `gemini-cli` CLIs bundled as alternate "brains" (the
-`claude` CLI is pre-wired through the same DeepSeek endpoint).
+backed by DeepSeek (`deepseek-v4-flash`) via its Anthropic-compatible
+endpoint, chatting over Telegram, with the `claude-code` and `gemini-cli`
+CLIs bundled as alternate "brains" (the `claude` CLI is pre-wired through
+the same DeepSeek endpoint).
+
+A small Node proxy (`scripts/deepseek-proxy.mjs`, listening on
+`127.0.0.1:8089` inside the container, started in the background by
+`scripts/start-zeroclaw.sh`) sits in front of DeepSeek and force-injects
+`thinking: {type: "disabled"}` into every `/v1/messages` request. This
+keeps v4-flash on the cheapest non-thinking pricing and side-steps a
+ZeroClaw v0.7.3 bug where prior thinking blocks in conversation history
+are not passed back to the API correctly. ZeroClaw's `default_provider`
+points at the proxy, not directly at api.deepseek.com.
 
 See [README.md](README.md) for the user-facing setup flow.
 

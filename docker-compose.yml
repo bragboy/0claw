@@ -9,9 +9,10 @@ services:
     env_file:
       - .env
     environment:
-      # Route the bundled `claude` CLI through DeepSeek's Anthropic-compatible
-      # endpoint using the same DeepSeek key as ZeroClaw itself.
-      ANTHROPIC_BASE_URL: https://api.deepseek.com/anthropic
+      # Route the bundled `claude` CLI through the in-container deepseek-proxy
+      # (127.0.0.1:8089) so it shares the same thinking-strip behavior ZeroClaw
+      # gets. The proxy forwards to https://api.deepseek.com/anthropic.
+      ANTHROPIC_BASE_URL: http://127.0.0.1:8089
       ANTHROPIC_AUTH_TOKEN: ${DEEPSEEK_API_KEY}
     ports:
       - "42617:42617"

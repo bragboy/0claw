@@ -9,8 +9,9 @@
 A Dockerized, cloud-agnostic harness for [ZeroClaw](https://github.com/zeroclaw-labs/zeroclaw) that:
 
 - runs the ZeroClaw daemon 24/7 with **Telegram** as the chat surface,
-- uses **DeepSeek** `deepseek-v4-flash` (thinking-disabled for cost) via its Anthropic-compatible endpoint as the reasoning backend - full tool access including web search,
-- bundles the `claude-code` and `gemini-cli` CLIs so the agent can delegate to a different "brain" on demand, with `claude` pre-wired through the same DeepSeek endpoint.
+- uses **DeepSeek** `deepseek-v4-flash` ($0.14/M input cache miss, $0.28/M output) via its Anthropic-compatible endpoint as the reasoning backend - full tool access including web search,
+- bundles the `claude-code` and `gemini-cli` CLIs so the agent can delegate to a different "brain" on demand, with `claude` pre-wired through the same DeepSeek endpoint,
+- runs a tiny in-container proxy (`scripts/deepseek-proxy.mjs`, `127.0.0.1:8089`) that injects `thinking: {type: "disabled"}` into every `/v1/messages` request and strips stale thinking blocks from history, keeping v4-flash on the cheap non-thinking path and side-stepping a ZeroClaw v0.7.3 multi-turn bug.
 
 ---
 
@@ -22,7 +23,9 @@ A Dockerized, cloud-agnostic harness for [ZeroClaw](https://github.com/zeroclaw-
 ├── docker-compose.yml      # single service, persistent volumes, restart: unless-stopped
 ├── .env.example            # copy to .env and fill in
 ├── scripts/
-│   └── init-deepseek.sh    # writes ~/.zeroclaw/config.toml + persona files
+│   ├── init-deepseek.sh      # writes ~/.zeroclaw/config.toml + persona files
+│   ├── deepseek-proxy.mjs    # node proxy that strips thinking from API calls
+│   └── start-zeroclaw.sh     # entrypoint: launches proxy + zeroclaw daemon
 ├── config/
 │   ├── zeroclaw/           # mounted -> /root/.zeroclaw  (ZeroClaw workspace + config)
 │   └── claude/             # mounted -> /root/.claude    (Claude Code state)
@@ -83,18 +86,19 @@ docker compose logs -f zeroclaw-hub
 
 Expected signals:
 
-- `zeroclaw doctor` reports the provider as `anthropic-custom:https://api.deepseek.com/anthropic` and the credential as present.
+- `zeroclaw doctor` reports the provider as `anthropic-custom:http://127.0.0.1:8089` (the in-container proxy) and the credential as present.
 - `zeroclaw agent -m "..."` returns a response from `deepseek-v4-flash`.
 - The web dashboard is reachable at <http://localhost:42617>.
+- The proxy itself is healthy: `docker compose exec zeroclaw-hub curl -sf http://127.0.0.1:8089/_health` prints `ok`.
 
-You can also smoke-test the DeepSeek key without the container. Use a generous `max_tokens` so the reply has room for the final text block (deepseek-v4-flash returns thinking + text in default mode; we disable thinking inside the container, but the raw API will still emit it here):
+You can also smoke-test the DeepSeek key directly (bypassing the proxy) with `thinking` disabled at the request level:
 
 ```bash
 (set -a; . ./.env; set +a; curl -sS -w "\nHTTP %{http_code}\n" \
   -H "x-api-key: $DEEPSEEK_API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
-  -d '{"model":"deepseek-v4-flash","max_tokens":200,"thinking":{"type":"disabled"},"messages":[{"role":"user","content":"ping"}]}' \
+  -d '{"model":"deepseek-v4-flash","max_tokens":50,"thinking":{"type":"disabled"},"messages":[{"role":"user","content":"ping"}]}' \
   https://api.deepseek.com/anthropic/v1/messages)
 ```
 
@@ -123,7 +127,7 @@ docker compose exec zeroclaw-hub fx-rate EUR USD 100              # Frankfurter/
 
 ### Picking a different model
 
-`init-deepseek.sh` defaults to `deepseek-v4-flash` with thinking forced off in `config.toml` (`[thinking] default_level = "off"`). Without that override, every reasoning token bills as an output token, which inflates cost ~10x for short replies. To change the model globally, set `ZEROCLAW_DEFAULT_MODEL` in `.env` and re-run:
+`init-deepseek.sh` defaults to `deepseek-v4-flash` (the cheapest tier: $0.14/M input cache miss, $0.28/M output as of 2026-04). The in-container proxy at `127.0.0.1:8089` always injects `thinking: {type: "disabled"}` and strips historical thinking blocks, so non-thinking behavior is enforced by the proxy regardless of model choice. Without it, v4-flash defaults to thinking-on (~10x cost on short replies) and ZeroClaw v0.7.3's multi-turn bookkeeping fails on prior thinking blocks. To change the model globally, set `ZEROCLAW_DEFAULT_MODEL` in `.env` and re-run:
 
 ```bash
 docker compose up -d                                    # re-reads env_file
@@ -131,7 +135,7 @@ docker compose exec zeroclaw-hub init-deepseek.sh       # rewrites config.toml
 docker compose restart zeroclaw-hub
 ```
 
-DeepSeek's Anthropic endpoint accepts `deepseek-v4-flash` (unified, controlled via the `[thinking]` block), `deepseek-v4-pro`, and the legacy `deepseek-chat` / `deepseek-reasoner` names (deprecated 2026/07/24).
+DeepSeek's Anthropic endpoint accepts `deepseek-v4-flash`, `deepseek-v4-pro` (more capable, ~3x cost), and the legacy `deepseek-chat` / `deepseek-reasoner` names (deprecated 2026/07/24).
 
 ### Adding more Telegram users
 
@@ -246,7 +250,8 @@ While the tunnel is up, open <http://localhost:42617> in your browser. Ctrl-C th
 |---|---|
 | `init-deepseek.sh` exits with "DEEPSEEK_API_KEY is not set" | `.env` is missing or not picked up. Confirm it lives next to `docker-compose.yml`. |
 | `zeroclaw doctor` flags the provider as unreachable | Container egress or corporate proxy blocking `api.deepseek.com`. |
-| Replies feel verbose or token usage spikes | `[thinking] default_level` is not `"off"` in `~/.zeroclaw/config.toml`. Re-run `init-deepseek.sh` and restart. |
+| Replies show thinking content or fail with `content[].thinking ... must be passed back` | The deepseek-proxy is not in the request path. Check `docker compose exec zeroclaw-hub curl -sf http://127.0.0.1:8089/_health` and that `default_provider` in `~/.zeroclaw/config.toml` points at `127.0.0.1:8089`, not `api.deepseek.com`. |
+| `start-zeroclaw` exits early with "deepseek-proxy died" | Node not in PATH or the proxy crashed on startup. `docker compose logs zeroclaw-hub` for the stderr line. |
 | `401 Unauthorized` from the provider | Key revoked or wrong. Re-check via the curl smoke test in section 3. |
 | Telegram messages are ignored | Sender id is not in the allowlist; add them to `TELEGRAM_ALLOWED_USER_ID` and regenerate. |
 | Agent replies "command blocked by security policy" | Autonomy is `supervised` and the command is risk-gated. Set `AUTONOMY_LEVEL=full` in `.env` if you want unrestricted shell inside the sandbox. |

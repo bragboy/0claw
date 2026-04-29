@@ -10,7 +10,7 @@ set -euo pipefail
 ZC_HOME="${ZEROCLAW_HOME:-$HOME/.zeroclaw}"
 ZC_CONFIG="${ZC_HOME}/config.toml"
 WS_DIR="${ZC_HOME}/workspace"
-DEEPSEEK_ENDPOINT="${ANTHROPIC_BASE_URL:-https://api.deepseek.com/anthropic}"
+DEEPSEEK_ENDPOINT="${ANTHROPIC_BASE_URL:-http://127.0.0.1:8089}"
 DEFAULT_MODEL="${ZEROCLAW_DEFAULT_MODEL:-deepseek-v4-flash}"
 GATEWAY_HOST="${ZEROCLAW_GATEWAY_HOST:-0.0.0.0}"
 GATEWAY_PORT="${ZEROCLAW_GATEWAY_PORT:-42617}"
@@ -35,13 +35,6 @@ allow_public_bind = true
 [reliability]
 provider_retries    = 2
 provider_backoff_ms = 500
-
-# DeepSeek's deepseek-v4-flash returns a thinking block + a text block by
-# default. Each thinking token bills as an output token, so leaving it on
-# multiplies cost by ~10x for short replies. Force it off; we trade a small
-# quality hit for predictable, cheap usage.
-[thinking]
-default_level = "off"
 EOF
 
   if [[ -n "${BRAVE_API_KEY:-}" ]]; then

@@ -77,20 +77,24 @@ RUN set -eux; \
 
 COPY --from=web-build /build/web/dist /opt/zeroclaw/web-dist
 
-COPY scripts/init-deepseek.sh      /usr/local/bin/init-deepseek.sh
-COPY scripts/news-search.sh   /usr/local/bin/news-search
-COPY scripts/crypto-price.sh  /usr/local/bin/crypto-price
-COPY scripts/stock-price.sh   /usr/local/bin/stock-price
-COPY scripts/fx-rate.sh       /usr/local/bin/fx-rate
-COPY scripts/weather-for.sh   /usr/local/bin/weather-for
-COPY scripts/do-task.sh       /usr/local/bin/do-task
+COPY scripts/init-deepseek.sh    /usr/local/bin/init-deepseek.sh
+COPY scripts/news-search.sh      /usr/local/bin/news-search
+COPY scripts/crypto-price.sh     /usr/local/bin/crypto-price
+COPY scripts/stock-price.sh      /usr/local/bin/stock-price
+COPY scripts/fx-rate.sh          /usr/local/bin/fx-rate
+COPY scripts/weather-for.sh      /usr/local/bin/weather-for
+COPY scripts/do-task.sh          /usr/local/bin/do-task
+COPY scripts/deepseek-proxy.mjs  /usr/local/bin/deepseek-proxy.mjs
+COPY scripts/start-zeroclaw.sh   /usr/local/bin/start-zeroclaw
 RUN chmod +x /usr/local/bin/init-deepseek.sh \
              /usr/local/bin/news-search \
              /usr/local/bin/crypto-price \
              /usr/local/bin/stock-price \
              /usr/local/bin/fx-rate \
              /usr/local/bin/weather-for \
-             /usr/local/bin/do-task
+             /usr/local/bin/do-task \
+             /usr/local/bin/deepseek-proxy.mjs \
+             /usr/local/bin/start-zeroclaw
 
 RUN mkdir -p "${ZEROCLAW_HOME}" "${CLAUDE_HOME}" "${WORKSPACE}"
 
@@ -99,4 +103,4 @@ WORKDIR /workspace
 EXPOSE 42617
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["zeroclaw", "daemon"]
+CMD ["start-zeroclaw"]
