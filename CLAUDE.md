@@ -3,9 +3,10 @@
 ## Project
 
 `0claw` is a Dockerized 24/7 AI automation hub: a single ZeroClaw daemon
-backed by GLM through z.ai's Anthropic-compatible endpoint, chatting over
-Telegram, with the `claude-code` and `gemini-cli` CLIs bundled as alternate
-"brains" (the `claude` CLI is pre-wired through the same GLM endpoint).
+backed by DeepSeek (`deepseek-v4-flash`, thinking-disabled for cost) via
+its Anthropic-compatible endpoint, chatting over Telegram, with the
+`claude-code` and `gemini-cli` CLIs bundled as alternate "brains" (the
+`claude` CLI is pre-wired through the same DeepSeek endpoint).
 
 See [README.md](README.md) for the user-facing setup flow.
 
@@ -22,6 +23,6 @@ See [README.md](README.md) for the user-facing setup flow.
 ## Deployment hygiene (zero ephemeral state)
 
 - During iteration on the VM, `docker cp` + `docker compose exec` is fine for fast feedback.
-- **Before ending any deploy session, the VM must be in a persistent state matching `origin/main`.** That means: commit the change, push, then run `ruby deploy.rb` (which performs `git pull` + `docker compose up -d --build` + `init-glm.sh` + restart on the VM), and verify.
+- **Before ending any deploy session, the VM must be in a persistent state matching `origin/main`.** That means: commit the change, push, then run `ruby deploy.rb` (which performs `git pull` + `docker compose up -d --build` + `init-deepseek.sh` + restart on the VM), and verify.
 - Never hand control back to the user with the running container carrying changes that aren't baked into the image. A VM reboot, container recreate, or `docker compose down && up` must leave every working fix intact.
 - The invariant: repo HEAD, latest image on the VM, and running container all correspond to the same git commit.

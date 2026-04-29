@@ -22,7 +22,7 @@ QUERY="$1"
 FRESHNESS="${2:-pd}"
 
 # ZeroClaw's shell tool scrubs env vars for security, so pull BRAVE_API_KEY
-# from the sideload file written by init-glm.sh when it's not in env.
+# from the sideload file written by init-deepseek.sh when it's not in env.
 if [[ -z "${BRAVE_API_KEY:-}" && -r /root/.zeroclaw/env ]]; then
   # shellcheck disable=SC1091
   . /root/.zeroclaw/env

@@ -77,7 +77,7 @@ when 'bootstrap'
 
   puts '--- first bring-up (may take 5-15 minutes on a 1 vCPU box) ---'
   ssh("cd #{REMOTE_DIR} && docker compose up -d --build")
-  ssh("cd #{REMOTE_DIR} && docker compose exec -T #{SERVICE} init-glm.sh")
+  ssh("cd #{REMOTE_DIR} && docker compose exec -T #{SERVICE} init-deepseek.sh")
   ssh("cd #{REMOTE_DIR} && docker compose restart #{SERVICE}")
   ssh("cd #{REMOTE_DIR} && docker compose ps")
 
@@ -85,7 +85,7 @@ when 'deploy', nil, ''
   preflight
   ssh("cd #{REMOTE_DIR} && git pull --ff-only")
   ssh("cd #{REMOTE_DIR} && docker compose up -d --build")
-  ssh("cd #{REMOTE_DIR} && docker compose exec -T #{SERVICE} init-glm.sh")
+  ssh("cd #{REMOTE_DIR} && docker compose exec -T #{SERVICE} init-deepseek.sh")
   ssh("cd #{REMOTE_DIR} && docker compose restart #{SERVICE}")
   ssh("cd #{REMOTE_DIR} && docker compose ps")
 
@@ -102,7 +102,7 @@ when 'env-refresh'
   run('scp', '.env', "#{REMOTE_HOST}:#{REMOTE_DIR}/.env")
   ssh("chmod 600 #{REMOTE_DIR}/.env")
   ssh("cd #{REMOTE_DIR} && docker compose up -d")
-  ssh("cd #{REMOTE_DIR} && docker compose exec -T #{SERVICE} init-glm.sh")
+  ssh("cd #{REMOTE_DIR} && docker compose exec -T #{SERVICE} init-deepseek.sh")
   ssh("cd #{REMOTE_DIR} && docker compose restart #{SERVICE}")
 
 when 'down'

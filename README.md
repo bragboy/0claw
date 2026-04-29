@@ -9,8 +9,8 @@
 A Dockerized, cloud-agnostic harness for [ZeroClaw](https://github.com/zeroclaw-labs/zeroclaw) that:
 
 - runs the ZeroClaw daemon 24/7 with **Telegram** as the chat surface,
-- uses **GLM** (via z.ai's Anthropic-compatible endpoint) as the reasoning backend - full tool access including web search,
-- bundles the `claude-code` and `gemini-cli` CLIs so the agent can delegate to a different "brain" on demand, with `claude` pre-wired through the same GLM endpoint.
+- uses **DeepSeek** `deepseek-v4-flash` (thinking-disabled for cost) via its Anthropic-compatible endpoint as the reasoning backend - full tool access including web search,
+- bundles the `claude-code` and `gemini-cli` CLIs so the agent can delegate to a different "brain" on demand, with `claude` pre-wired through the same DeepSeek endpoint.
 
 ---
 
@@ -22,7 +22,7 @@ A Dockerized, cloud-agnostic harness for [ZeroClaw](https://github.com/zeroclaw-
 ├── docker-compose.yml      # single service, persistent volumes, restart: unless-stopped
 ├── .env.example            # copy to .env and fill in
 ├── scripts/
-│   └── init-glm.sh         # writes ~/.zeroclaw/config.toml + persona files
+│   └── init-deepseek.sh    # writes ~/.zeroclaw/config.toml + persona files
 ├── config/
 │   ├── zeroclaw/           # mounted -> /root/.zeroclaw  (ZeroClaw workspace + config)
 │   └── claude/             # mounted -> /root/.claude    (Claude Code state)
@@ -38,7 +38,7 @@ The `config/` and `workspace/` directories are git-ignored but their parent dirs
 ```bash
 # 1. Populate secrets
 cp .env.example .env
-$EDITOR .env      # fill in GLM_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOWED_USER_ID
+$EDITOR .env      # fill in DEEPSEEK_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOWED_USER_ID
 
 # 2. Build the image (first build also compiles the React dashboard)
 docker compose build
@@ -55,7 +55,7 @@ Pinned versions: ZeroClaw `v0.7.3`, Node.js `22`. Change `ZEROCLAW_VERSION` / `N
 docker compose up -d
 
 # Write ~/.zeroclaw/config.toml and persona files (IDENTITY/SOUL/USER.md)
-docker compose exec zeroclaw-hub init-glm.sh
+docker compose exec zeroclaw-hub init-deepseek.sh
 
 # Walk through ZeroClaw's wizard if you want the TUI onboarder
 docker compose exec -it zeroclaw-hub zeroclaw onboard   # optional
@@ -64,7 +64,7 @@ docker compose exec -it zeroclaw-hub zeroclaw onboard   # optional
 docker compose restart zeroclaw-hub
 ```
 
-If you populated `TELEGRAM_BOT_TOKEN` and `TELEGRAM_ALLOWED_USER_ID` in `.env`, `init-glm.sh` auto-wires the Telegram channel - no separate `zeroclaw channel bind-telegram` call needed.
+If you populated `TELEGRAM_BOT_TOKEN` and `TELEGRAM_ALLOWED_USER_ID` in `.env`, `init-deepseek.sh` auto-wires the Telegram channel - no separate `zeroclaw channel bind-telegram` call needed.
 
 ---
 
@@ -83,19 +83,19 @@ docker compose logs -f zeroclaw-hub
 
 Expected signals:
 
-- `zeroclaw doctor` reports the provider as `anthropic-custom:https://api.z.ai/api/anthropic` and the credential as present.
-- `zeroclaw agent -m "..."` returns a response from `glm-4.6`.
+- `zeroclaw doctor` reports the provider as `anthropic-custom:https://api.deepseek.com/anthropic` and the credential as present.
+- `zeroclaw agent -m "..."` returns a response from `deepseek-v4-flash`.
 - The web dashboard is reachable at <http://localhost:42617>.
 
-You can also smoke-test the GLM key without the container:
+You can also smoke-test the DeepSeek key without the container. Use a generous `max_tokens` so the reply has room for the final text block (deepseek-v4-flash returns thinking + text in default mode; we disable thinking inside the container, but the raw API will still emit it here):
 
 ```bash
 (set -a; . ./.env; set +a; curl -sS -w "\nHTTP %{http_code}\n" \
-  -H "x-api-key: $GLM_API_KEY" \
+  -H "x-api-key: $DEEPSEEK_API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
-  -d '{"model":"glm-4.6","max_tokens":10,"messages":[{"role":"user","content":"ping"}]}' \
-  https://api.z.ai/api/anthropic/v1/messages)
+  -d '{"model":"deepseek-v4-flash","max_tokens":200,"thinking":{"type":"disabled"},"messages":[{"role":"user","content":"ping"}]}' \
+  https://api.deepseek.com/anthropic/v1/messages)
 ```
 
 ---
@@ -105,7 +105,7 @@ You can also smoke-test the GLM key without the container:
 - Chat with the bot directly in Telegram. Messages from any id listed in `TELEGRAM_ALLOWED_USER_ID` go through; anyone else is silently ignored (warning in logs).
 - To switch "brains" for a specific task, invoke the bundled CLIs from inside the container:
   ```bash
-  docker compose exec zeroclaw-hub claude   # Claude Code CLI, pre-wired through z.ai/GLM via ANTHROPIC_BASE_URL
+  docker compose exec zeroclaw-hub claude   # Claude Code CLI, pre-wired through DeepSeek via ANTHROPIC_BASE_URL
   docker compose exec zeroclaw-hub gemini   # Gemini CLI (needs GEMINI_API_KEY or Google OAuth)
   ```
 - Persistent state lives in `./config/zeroclaw` and `./config/claude`. Back these up to preserve memory, channel bindings, and approvals.
@@ -123,15 +123,15 @@ docker compose exec zeroclaw-hub fx-rate EUR USD 100              # Frankfurter/
 
 ### Picking a different model
 
-`init-glm.sh` defaults to `glm-4.6`. To change globally, set `ZEROCLAW_DEFAULT_MODEL` in `.env` and re-run:
+`init-deepseek.sh` defaults to `deepseek-v4-flash` with thinking forced off in `config.toml` (`[thinking] default_level = "off"`). Without that override, every reasoning token bills as an output token, which inflates cost ~10x for short replies. To change the model globally, set `ZEROCLAW_DEFAULT_MODEL` in `.env` and re-run:
 
 ```bash
-docker compose up -d                               # re-reads env_file
-docker compose exec zeroclaw-hub init-glm.sh       # rewrites config.toml
+docker compose up -d                                    # re-reads env_file
+docker compose exec zeroclaw-hub init-deepseek.sh       # rewrites config.toml
 docker compose restart zeroclaw-hub
 ```
 
-z.ai's Anthropic endpoint accepts GLM model names directly (`glm-4.6`, `glm-4.5-air`, etc.) and remaps Anthropic-style names to GLM server-side.
+DeepSeek's Anthropic endpoint accepts `deepseek-v4-flash` (unified, controlled via the `[thinking]` block), `deepseek-v4-pro`, and the legacy `deepseek-chat` / `deepseek-reasoner` names (deprecated 2026/07/24).
 
 ### Adding more Telegram users
 
@@ -141,7 +141,7 @@ Comma-append the id in `.env`:
 TELEGRAM_ALLOWED_USER_ID=100116514,47946531,...
 ```
 
-Then `docker compose exec zeroclaw-hub init-glm.sh && docker compose restart zeroclaw-hub`.
+Then `docker compose exec zeroclaw-hub init-deepseek.sh && docker compose restart zeroclaw-hub`.
 
 To grab a new user's id, have them message the bot, then:
 
@@ -159,17 +159,17 @@ ZeroClaw logs the sender id and username for every rejected message.
 - `full` - kitchen-sink unrestricted: no allowlist, no forbidden paths, no approval gates, no rate or cost caps. Use only inside a disposable sandbox like this container.
 - `read_only` - agent observes, does not act.
 
-After editing `.env`, rerun `init-glm.sh` on the host and restart.
+After editing `.env`, rerun `init-deepseek.sh` on the host and restart.
 
 ---
 
-## 5. Rotating the GLM key
+## 5. Rotating the DeepSeek key
 
-Update `GLM_API_KEY` in `.env`, then:
+Update `DEEPSEEK_API_KEY` in `.env`, then:
 
 ```bash
-docker compose up -d                               # re-reads env_file, also refreshes ANTHROPIC_AUTH_TOKEN
-docker compose exec zeroclaw-hub init-glm.sh       # rewrites config.toml
+docker compose up -d                                    # re-reads env_file, also refreshes ANTHROPIC_AUTH_TOKEN
+docker compose exec zeroclaw-hub init-deepseek.sh       # rewrites config.toml
 docker compose restart zeroclaw-hub
 ```
 
@@ -244,8 +244,9 @@ While the tunnel is up, open <http://localhost:42617> in your browser. Ctrl-C th
 
 | Symptom | First thing to check |
 |---|---|
-| `init-glm.sh` exits with "GLM_API_KEY is not set" | `.env` is missing or not picked up. Confirm it lives next to `docker-compose.yml`. |
-| `zeroclaw doctor` flags the provider as unreachable | Container egress or corporate proxy blocking `api.z.ai`. |
+| `init-deepseek.sh` exits with "DEEPSEEK_API_KEY is not set" | `.env` is missing or not picked up. Confirm it lives next to `docker-compose.yml`. |
+| `zeroclaw doctor` flags the provider as unreachable | Container egress or corporate proxy blocking `api.deepseek.com`. |
+| Replies feel verbose or token usage spikes | `[thinking] default_level` is not `"off"` in `~/.zeroclaw/config.toml`. Re-run `init-deepseek.sh` and restart. |
 | `401 Unauthorized` from the provider | Key revoked or wrong. Re-check via the curl smoke test in section 3. |
 | Telegram messages are ignored | Sender id is not in the allowlist; add them to `TELEGRAM_ALLOWED_USER_ID` and regenerate. |
 | Agent replies "command blocked by security policy" | Autonomy is `supervised` and the command is risk-gated. Set `AUTONOMY_LEVEL=full` in `.env` if you want unrestricted shell inside the sandbox. |
@@ -257,4 +258,5 @@ While the tunnel is up, open <http://localhost:42617> in your browser. Ctrl-C th
 
 - ZeroClaw repo and docs: <https://github.com/zeroclaw-labs/zeroclaw>
 - Providers reference (custom Anthropic endpoints): `docs/reference/api/providers-reference.md`
-- z.ai Anthropic-compatible endpoint: <https://api.z.ai/api/anthropic>
+- DeepSeek API docs (Anthropic-compatible endpoint): <https://api-docs.deepseek.com/>
+- DeepSeek Anthropic-compatible base URL: <https://api.deepseek.com/anthropic>

@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# init-glm.sh - point ZeroClaw at GLM via z.ai's Anthropic-compatible
+# init-deepseek.sh - point ZeroClaw at DeepSeek via its Anthropic-compatible
 # endpoint, bind the gateway to the host, and (if credentials are present)
 # wire the Telegram channel. Idempotent: safe to re-run whenever .env
 # changes.
 set -euo pipefail
 
-: "${GLM_API_KEY:?GLM_API_KEY is not set - populate it in .env and restart}"
+: "${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY is not set - populate it in .env and restart}"
 
 ZC_HOME="${ZEROCLAW_HOME:-$HOME/.zeroclaw}"
 ZC_CONFIG="${ZC_HOME}/config.toml"
 WS_DIR="${ZC_HOME}/workspace"
-GLM_ENDPOINT="${ANTHROPIC_BASE_URL:-https://api.z.ai/api/anthropic}"
-DEFAULT_MODEL="${ZEROCLAW_DEFAULT_MODEL:-glm-4.6}"
+DEEPSEEK_ENDPOINT="${ANTHROPIC_BASE_URL:-https://api.deepseek.com/anthropic}"
+DEFAULT_MODEL="${ZEROCLAW_DEFAULT_MODEL:-deepseek-v4-flash}"
 GATEWAY_HOST="${ZEROCLAW_GATEWAY_HOST:-0.0.0.0}"
 GATEWAY_PORT="${ZEROCLAW_GATEWAY_PORT:-42617}"
 AGENT_NAME="${AGENT_NAME:-Rebecca}"
@@ -22,10 +22,10 @@ mkdir -p "${ZC_HOME}" "${WS_DIR}"
 
 {
   cat <<EOF
-# Managed by init-glm.sh - regenerated on each run.
-default_provider = "anthropic-custom:${GLM_ENDPOINT}"
+# Managed by init-deepseek.sh - regenerated on each run.
+default_provider = "anthropic-custom:${DEEPSEEK_ENDPOINT}"
 default_model    = "${DEFAULT_MODEL}"
-api_key          = "${GLM_API_KEY}"
+api_key          = "${DEEPSEEK_API_KEY}"
 
 [gateway]
 host              = "${GATEWAY_HOST}"
@@ -35,6 +35,13 @@ allow_public_bind = true
 [reliability]
 provider_retries    = 2
 provider_backoff_ms = 500
+
+# DeepSeek's deepseek-v4-flash returns a thinking block + a text block by
+# default. Each thinking token bills as an output token, so leaving it on
+# multiplies cost by ~10x for short replies. Force it off; we trade a small
+# quality hit for predictable, cheap usage.
+[thinking]
+default_level = "off"
 EOF
 
   if [[ -n "${BRAVE_API_KEY:-}" ]]; then
@@ -270,10 +277,10 @@ Never invoke `llm_task` or sub-agent tools for this case.
 
 Never pass `provider` or `model` parameters when calling the `llm_task`
 tool. Let both fall through to the configured defaults (anthropic-custom
-via z.ai, glm-4.6). The tool schema lists values like `openrouter` and
-`anthropic/claude-sonnet-4.6` as illustrative examples, not defaults.
-Overriding with those will try to reach providers we have no key for
-and fail with "API key not set" errors.
+via DeepSeek, deepseek-v4-flash). The tool schema lists values like
+`openrouter` and `anthropic/claude-sonnet-4.6` as illustrative examples,
+not defaults. Overriding with those will try to reach providers we have
+no key for and fail with "API key not set" errors.
 
 ## Scheduling vs. immediate answer
 
@@ -467,21 +474,21 @@ EOF
 
 chmod 600 "${WS_DIR}"/IDENTITY.md "${WS_DIR}"/SOUL.md "${WS_DIR}"/USER.md "${WS_DIR}"/TOOLS.md
 
-echo "[init-glm] wrote ${ZC_CONFIG}"
-echo "[init-glm] provider = anthropic-custom:${GLM_ENDPOINT}"
-echo "[init-glm] model    = ${DEFAULT_MODEL}"
-echo "[init-glm] gateway  = ${GATEWAY_HOST}:${GATEWAY_PORT}  (allow_public_bind = true)"
-echo "[init-glm] persona  = ${AGENT_NAME}  (IDENTITY/SOUL/USER.md written to ${WS_DIR})"
-echo "[init-glm] timezone = ${USER_TIMEZONE}"
-echo "[init-glm] autonomy = ${AUTONOMY_LEVEL}"
+echo "[init-deepseek] wrote ${ZC_CONFIG}"
+echo "[init-deepseek] provider = anthropic-custom:${DEEPSEEK_ENDPOINT}"
+echo "[init-deepseek] model    = ${DEFAULT_MODEL}"
+echo "[init-deepseek] gateway  = ${GATEWAY_HOST}:${GATEWAY_PORT}  (allow_public_bind = true)"
+echo "[init-deepseek] persona  = ${AGENT_NAME}  (IDENTITY/SOUL/USER.md written to ${WS_DIR})"
+echo "[init-deepseek] timezone = ${USER_TIMEZONE}"
+echo "[init-deepseek] autonomy = ${AUTONOMY_LEVEL}"
 if [[ "${WS_WIRED}" == "1" ]]; then
-  echo "[init-glm] websearch = brave  (BRAVE_API_KEY present)"
+  echo "[init-deepseek] websearch = brave  (BRAVE_API_KEY present)"
 else
-  echo "[init-glm] websearch = disabled (set BRAVE_API_KEY in .env to enable)"
+  echo "[init-deepseek] websearch = disabled (set BRAVE_API_KEY in .env to enable)"
 fi
 if [[ "${TG_WIRED}" == "1" ]]; then
-  echo "[init-glm] telegram = wired  (allowed_users = [${TG_USER_LIST}])"
+  echo "[init-deepseek] telegram = wired  (allowed_users = [${TG_USER_LIST}])"
 else
-  echo "[init-glm] telegram = skipped (set TELEGRAM_BOT_TOKEN + TELEGRAM_ALLOWED_USER_ID in .env to enable)"
+  echo "[init-deepseek] telegram = skipped (set TELEGRAM_BOT_TOKEN + TELEGRAM_ALLOWED_USER_ID in .env to enable)"
 fi
-echo "[init-glm] restart the container to pick up channel changes."
+echo "[init-deepseek] restart the container to pick up channel changes."

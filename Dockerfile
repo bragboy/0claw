@@ -77,14 +77,14 @@ RUN set -eux; \
 
 COPY --from=web-build /build/web/dist /opt/zeroclaw/web-dist
 
-COPY scripts/init-glm.sh      /usr/local/bin/init-glm.sh
+COPY scripts/init-deepseek.sh      /usr/local/bin/init-deepseek.sh
 COPY scripts/news-search.sh   /usr/local/bin/news-search
 COPY scripts/crypto-price.sh  /usr/local/bin/crypto-price
 COPY scripts/stock-price.sh   /usr/local/bin/stock-price
 COPY scripts/fx-rate.sh       /usr/local/bin/fx-rate
 COPY scripts/weather-for.sh   /usr/local/bin/weather-for
 COPY scripts/do-task.sh       /usr/local/bin/do-task
-RUN chmod +x /usr/local/bin/init-glm.sh \
+RUN chmod +x /usr/local/bin/init-deepseek.sh \
              /usr/local/bin/news-search \
              /usr/local/bin/crypto-price \
              /usr/local/bin/stock-price \

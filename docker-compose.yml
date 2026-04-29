@@ -9,10 +9,10 @@ services:
     env_file:
       - .env
     environment:
-      # Route the bundled `claude` CLI through z.ai's Anthropic-compatible
-      # endpoint using the same GLM key as ZeroClaw itself.
-      ANTHROPIC_BASE_URL: https://api.z.ai/api/anthropic
-      ANTHROPIC_AUTH_TOKEN: ${GLM_API_KEY}
+      # Route the bundled `claude` CLI through DeepSeek's Anthropic-compatible
+      # endpoint using the same DeepSeek key as ZeroClaw itself.
+      ANTHROPIC_BASE_URL: https://api.deepseek.com/anthropic
+      ANTHROPIC_AUTH_TOKEN: ${DEEPSEEK_API_KEY}
     ports:
       - "42617:42617"
     volumes:
