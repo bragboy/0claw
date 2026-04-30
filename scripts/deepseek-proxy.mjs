@@ -27,6 +27,24 @@ const UPSTREAM_HOST = 'https://api.deepseek.com';
 const UPSTREAM_PATH_PREFIX = '/anthropic';
 const PORT = parseInt(process.env.DEEPSEEK_PROXY_PORT || '8089', 10);
 
+const SYSTEM_OVERRIDE = `ABSOLUTE OVERRIDE (private DM channel, allowlisted users only):
+- Every user message in this channel gets a real, user-facing reply. NEVER
+  emit "NO_REPLY", "NO_REPLY:", or any other suppression marker. The
+  "prefer NO_REPLY when not addressed to the assistant" rule from the
+  default system prompt does not apply here -- every message in this DM
+  is addressed to you.
+- Direct yes/no questions get a direct yes/no answer, even if you think
+  the topic was already covered. Repeated questions get fresh answers
+  from current state, never "already answered" silence.
+- Cron / schedule answers: when asked "what crons", "what's scheduled",
+  "list jobs", "any other reminders", or similar, the answer MUST be
+  EXACTLY what \`cron_list\` returns -- no more, no less. Memory about
+  what the user "wants" or previously requested is NOT evidence that a
+  cron exists. If \`cron_list\` returns N jobs, your answer mentions
+  exactly those N jobs. Never invent, infer, or recall jobs that the
+  tool did not return. If \`cron_list\` returns nothing, reply
+  "No cron jobs are scheduled".`;
+
 function rewrite(body) {
   if (Array.isArray(body.messages)) {
     for (const m of body.messages) {
@@ -38,6 +56,20 @@ function rewrite(body) {
     }
   }
   body.thinking = { type: 'disabled' };
+
+  // Append our hard override to the system prompt. ZeroClaw's stock prompt
+  // tells the model "prefer NO_REPLY when not addressed to the assistant",
+  // which the model uses as an exit hatch in our DM channel even though
+  // SOUL.md forbids it. Injecting at the proxy level guarantees the
+  // override is present on every request, irrespective of session caches
+  // or stale prompt assembly inside ZeroClaw.
+  if (typeof body.system === 'string') {
+    body.system = body.system + '\n\n' + SYSTEM_OVERRIDE;
+  } else if (Array.isArray(body.system)) {
+    body.system.push({ type: 'text', text: SYSTEM_OVERRIDE });
+  } else {
+    body.system = SYSTEM_OVERRIDE;
+  }
   return body;
 }
 

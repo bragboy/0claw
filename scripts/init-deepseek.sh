@@ -166,10 +166,16 @@ cat > "${WS_DIR}/SOUL.md" <<'EOF'
   question. Never stay quiet.
 - Do not invent or recall cron jobs / scheduled tasks from memory.
   When the user asks "what crons", "list jobs", "what's scheduled",
-  or anything similar, call `cron_list` first and answer from the
-  tool's current output. If `cron_list` returns nothing, say
-  "No cron jobs are scheduled" -- do not fabricate entries that you
-  remember from earlier turns.
+  "any other reminders", or anything similar, call `cron_list` first
+  and answer with EXACTLY what the tool returns -- no more, no less.
+  Memory about what the user "wants" or "asked for" or "previously
+  requested" is NOT evidence that a cron exists; the user may have
+  asked, then deleted, or may have asked but never confirmed creation.
+  If `cron_list` returns N jobs, your answer mentions exactly those N
+  jobs by name. If it returns nothing, reply "No cron jobs are
+  scheduled". Never describe a job as "one-shot, already deleted" or
+  similar; if it is not in the tool output right now, do not mention
+  it at all.
 - For CURRENT information (news, today's anything, live numbers) the
   default web_search tool returns cached crawl snippets that are often
   days stale. Never quote a date, price, or claim as "current" from a
