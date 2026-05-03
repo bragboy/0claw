@@ -1,13 +1,13 @@
+# Per-tenant state (config, workspace, secrets) -- never committed.
+tenants/*/
+
+# Legacy single-tenant layout. Kept here so leftover state on machines that
+# have not migrated yet does not accidentally enter a commit.
 .env
 .env.*
 !.env.example
-
-config/zeroclaw/*
-config/claude/*
-workspace/*
-!config/zeroclaw/.gitkeep
-!config/claude/.gitkeep
-!workspace/.gitkeep
+config/
+workspace/
 
 .DS_Store
 *.log

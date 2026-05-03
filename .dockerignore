@@ -1,4 +1,7 @@
-# Runtime state and secrets, must never enter the build context.
+# Per-tenant runtime state and secrets, must never enter the build context.
+tenants/
+
+# Legacy single-tenant paths (kept until everyone has migrated).
 .env
 .env.*
 !.env.example

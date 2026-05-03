@@ -4,10 +4,13 @@ services:
       context: .
       dockerfile: Dockerfile
     image: zeroclaw-hub:local
-    container_name: zeroclaw-hub
+    # One container per tenant; the slug also becomes the docker compose
+    # project name (`docker compose -p zeroclaw-<slug>`) so multiple tenants
+    # coexist on the same host without colliding.
+    container_name: zeroclaw-hub-${USER_SLUG}
     restart: unless-stopped
     env_file:
-      - .env
+      - tenants/${USER_SLUG}/.env
     environment:
       # Route the bundled `claude` CLI through the in-container deepseek-proxy
       # (127.0.0.1:8089) so it shares the same thinking-strip behavior ZeroClaw
@@ -15,11 +18,15 @@ services:
       ANTHROPIC_BASE_URL: http://127.0.0.1:8089
       ANTHROPIC_AUTH_TOKEN: ${DEEPSEEK_API_KEY}
     ports:
-      - "42617:42617"
+      # VM loopback only; never exposed to the public internet. The dashboard
+      # is reached via `ruby deploy.rb tunnel <slug>`. Each tenant uses a
+      # different ZEROCLAW_GATEWAY_PORT (set in tenants/<slug>/.env) so
+      # multiple tenants can run side by side on one VM.
+      - "127.0.0.1:${ZEROCLAW_GATEWAY_PORT}:42617"
     volumes:
-      - ./config/zeroclaw:/root/.zeroclaw
-      - ./config/claude:/root/.claude
-      - ./workspace:/workspace
+      - ./tenants/${USER_SLUG}/config/zeroclaw:/root/.zeroclaw
+      - ./tenants/${USER_SLUG}/config/claude:/root/.claude
+      - ./tenants/${USER_SLUG}/workspace:/workspace
     stdin_open: true
     tty: true
     healthcheck:
