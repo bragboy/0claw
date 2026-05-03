@@ -13,7 +13,13 @@ WS_DIR="${ZC_HOME}/workspace"
 DEEPSEEK_ENDPOINT="${ANTHROPIC_BASE_URL:-http://127.0.0.1:8089}"
 DEFAULT_MODEL="${ZEROCLAW_DEFAULT_MODEL:-deepseek-v4-flash}"
 GATEWAY_HOST="${ZEROCLAW_GATEWAY_HOST:-0.0.0.0}"
-GATEWAY_PORT="${ZEROCLAW_GATEWAY_PORT:-42617}"
+# The gateway always listens on 42617 INSIDE the container. The per-tenant
+# `ZEROCLAW_GATEWAY_PORT` in .env is the HOST-side mapping (used by
+# docker-compose `ports:` and by `ruby deploy.rb tunnel <slug>` for the SSH
+# forward); it must not be used here, otherwise `docker-compose ports
+# <host>:42617` and the daemon's `bind <host>` disagree and the dashboard
+# is unreachable on the host.
+GATEWAY_PORT=42617
 AGENT_NAME="${AGENT_NAME:-Rebecca}"
 AUTONOMY_LEVEL="${AUTONOMY_LEVEL:-supervised}"
 USER_TIMEZONE="${USER_TIMEZONE:-UTC}"
