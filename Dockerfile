@@ -1,25 +1,14 @@
 # syntax=docker/dockerfile:1.7
 
 ARG NODE_MAJOR=22
-ARG ZEROCLAW_VERSION=v0.7.3
+ARG ZEROCLAW_VERSION=v0.8.4
 
-# ---------- stage 1: build the React dashboard from zeroclaw source ----------
-FROM node:${NODE_MAJOR}-bookworm-slim AS web-build
-ARG ZEROCLAW_VERSION
+# Since v0.8.x the release tarball ships a prebuilt `web/dist` alongside the
+# binaries, so there is no dashboard build stage: the dashboard is installed
+# straight from the same verified tarball as `zeroclaw` itself. (Building it
+# from the source tarball is not possible anyway - `web/src/lib/api-generated`
+# and friends are codegen outputs that are not included in the source archive.)
 
-RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl \
- && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /build
-RUN curl -fsSL "https://github.com/zeroclaw-labs/zeroclaw/archive/refs/tags/${ZEROCLAW_VERSION}.tar.gz" \
-      | tar -xz --strip-components=1
-
-WORKDIR /build/web
-RUN npm ci && npm run build
-# produces /build/web/dist
-
-# ---------- stage 2: runtime ----------
 FROM debian:bookworm-slim
 ARG TARGETARCH
 ARG ZEROCLAW_VERSION
@@ -39,6 +28,7 @@ RUN apt-get update \
       gnupg \
       git \
       jq \
+      sqlite3 \
       tini \
       xz-utils \
  && rm -rf /var/lib/apt/lists/*
@@ -72,10 +62,15 @@ RUN set -eux; \
     grep " ${TARBALL}$" SHA256SUMS | sha256sum -c -; \
     tar -xzf "${TARBALL}"; \
     install -m 0755 "$(find . -maxdepth 3 -type f -name zeroclaw | head -n1)" /usr/local/bin/zeroclaw; \
-    rm -rf /tmp/zeroclaw* /tmp/SHA256SUMS; \
+    ZC_CODE="$(find . -maxdepth 3 -type f -name zerocode | head -n1)"; \
+    if [ -n "${ZC_CODE}" ]; then install -m 0755 "${ZC_CODE}" /usr/local/bin/zerocode; fi; \
+    ZC_DIST="$(find . -maxdepth 4 -type d -path '*/web/dist' | head -n1)"; \
+    test -n "${ZC_DIST}"; \
+    mkdir -p /opt/zeroclaw; \
+    cp -r "${ZC_DIST}" /opt/zeroclaw/web-dist; \
+    test -f /opt/zeroclaw/web-dist/index.html; \
+    rm -rf /tmp/zeroclaw* /tmp/zerocode /tmp/web /tmp/SHA256SUMS; \
     zeroclaw --version
-
-COPY --from=web-build /build/web/dist /opt/zeroclaw/web-dist
 
 COPY scripts/init-deepseek.sh    /usr/local/bin/init-deepseek.sh
 COPY scripts/news-search.sh      /usr/local/bin/news-search

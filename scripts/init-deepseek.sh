@@ -9,7 +9,18 @@ set -euo pipefail
 
 ZC_HOME="${ZEROCLAW_HOME:-$HOME/.zeroclaw}"
 ZC_CONFIG="${ZC_HOME}/config.toml"
-WS_DIR="${ZC_HOME}/workspace"
+
+# ZeroClaw v0.8 splits the install root three ways: per-agent private data
+# under agents/<alias>/, instance-wide databases under data/, and shared
+# resources under shared/. Persona/identity markdown is per-agent; the SQLite
+# stores (memory, sessions, cron, costs) live in data/ and partition by agent
+# at the row level. WS_DIR is the agent's jailed workspace, which is where the
+# persona files below have to land.
+AGENT_ALIAS="${ZEROCLAW_AGENT_ALIAS:-default}"
+LEGACY_WS="${ZC_HOME}/workspace"
+WS_DIR="${ZC_HOME}/agents/${AGENT_ALIAS}/workspace"
+DATA_DIR="${ZC_HOME}/data"
+
 DEEPSEEK_ENDPOINT="${ANTHROPIC_BASE_URL:-http://127.0.0.1:8089}"
 DEFAULT_MODEL="${ZEROCLAW_DEFAULT_MODEL:-deepseek-v4-flash}"
 GATEWAY_HOST="${ZEROCLAW_GATEWAY_HOST:-0.0.0.0}"
@@ -24,14 +35,110 @@ AGENT_NAME="${AGENT_NAME:-Rebecca}"
 AUTONOMY_LEVEL="${AUTONOMY_LEVEL:-supervised}"
 USER_TIMEZONE="${USER_TIMEZONE:-UTC}"
 
-mkdir -p "${ZC_HOME}" "${WS_DIR}"
+mkdir -p "${ZC_HOME}" "${WS_DIR}" "${DATA_DIR}"
+
+# --- one-time relocation of the pre-0.8 flat layout -------------------------
+# v0.7.x kept persona files and every database together in <install>/workspace/.
+# v0.8 wants persona under agents/<alias>/workspace/ and the databases under
+# data/. Move each piece once, then breadcrumb so re-runs are no-ops.
+migrate_legacy_layout() {
+  if [[ ! -d "${LEGACY_WS}" ]]; then return 0; fi
+  if [[ -e "${ZC_HOME}/.layout-v3-migrated" ]]; then return 0; fi
+
+  echo "init-deepseek: relocating pre-0.8 layout into agents/${AGENT_ALIAS}/ + data/" >&2
+
+  local d
+  for d in memory sessions cron state; do
+    if [[ -d "${LEGACY_WS}/${d}" && ! -e "${DATA_DIR}/${d}" ]]; then
+      mv "${LEGACY_WS}/${d}" "${DATA_DIR}/${d}"
+    fi
+  done
+  if [[ -f "${LEGACY_WS}/devices.db" && ! -e "${DATA_DIR}/devices.db" ]]; then
+    mv "${LEGACY_WS}/devices.db" "${DATA_DIR}/devices.db"
+  fi
+
+  # Whatever is left is per-agent: persona markdown plus anything the agent
+  # created for itself (brief scripts, notes, scratch files).
+  local p
+  shopt -s dotglob nullglob
+  for p in "${LEGACY_WS}"/*; do
+    mv -n "${p}" "${WS_DIR}/" || true
+  done
+  shopt -u dotglob nullglob
+
+  rmdir "${LEGACY_WS}" 2>/dev/null || true
+  : > "${ZC_HOME}/.layout-v3-migrated"
+}
+
+# Cron jobs store their command as an absolute path, so every job created
+# before the move still points into the old workspace. Rewrite them in place.
+rewrite_cron_paths() {
+  local db="${DATA_DIR}/cron/jobs.db"
+  if [[ ! -f "${db}" ]]; then return 0; fi
+  if ! command -v sqlite3 >/dev/null 2>&1; then
+    echo "init-deepseek: sqlite3 missing, cron paths not rewritten" >&2
+    return 0
+  fi
+  sqlite3 "${db}" \
+    "UPDATE cron_jobs SET command = replace(command, '${LEGACY_WS}/', '${WS_DIR}/')
+       WHERE command LIKE '%${LEGACY_WS}/%';
+     UPDATE cron_jobs SET prompt = replace(prompt, '${LEGACY_WS}/', '${WS_DIR}/')
+       WHERE prompt LIKE '%${LEGACY_WS}/%';" >/dev/null 2>&1 || true
+}
+
+migrate_legacy_layout
+rewrite_cron_paths
+
+# Telegram allowlist feeds the peer group below, not the channel block: in v3
+# the channel carries transport credentials and the peer group decides who is
+# allowed to talk to the bound agent.
+TG_USER_LIST=""
+if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "${TELEGRAM_ALLOWED_USER_ID:-}" ]]; then
+  IFS=',' read -ra TG_USER_IDS <<< "${TELEGRAM_ALLOWED_USER_ID}"
+  for uid in "${TG_USER_IDS[@]}"; do
+    uid="${uid// /}"
+    if [[ -z "$uid" ]]; then continue; fi
+    if [[ -n "$TG_USER_LIST" ]]; then TG_USER_LIST+=", "; fi
+    TG_USER_LIST+="\"${uid}\""
+  done
+fi
+if [[ -n "${TG_USER_LIST}" ]]; then TG_WIRED=1; else TG_WIRED=0; fi
+if [[ "${TG_WIRED}" == "1" ]]; then
+  AGENT_CHANNELS="[\"telegram.${AGENT_ALIAS}\"]"
+else
+  AGENT_CHANNELS="[]"
+fi
+
+# Autonomy maps onto two v3 blocks: risk_profiles (what the agent may touch)
+# and runtime_profiles (how hard it may work).
+case "${AUTONOMY_LEVEL}" in
+  full)
+    read -r -d '' RISK_BODY <<EOF || true
+level                            = "full"
+workspace_only                   = false
+allowed_commands                 = ["*"]
+forbidden_paths                  = []
+allowed_roots                    = ["/"]
+require_approval_for_medium_risk = false
+block_high_risk_commands         = false
+auto_approve                     = ["*"]
+EOF
+    RUNTIME_BODY=$'max_actions_per_hour   = 100000\nmax_cost_per_day_cents = 1000000'
+    ;;
+  read_only)
+    RISK_BODY=$'level            = "read_only"\nallowed_commands = ["*"]'
+    RUNTIME_BODY=""
+    ;;
+  supervised|*)
+    RISK_BODY=$'level            = "supervised"\nallowed_commands = ["*"]'
+    RUNTIME_BODY=""
+    ;;
+esac
 
 {
   cat <<EOF
 # Managed by init-deepseek.sh - regenerated on each run.
-default_provider = "anthropic-custom:${DEEPSEEK_ENDPOINT}"
-default_model    = "${DEFAULT_MODEL}"
-api_key          = "${DEEPSEEK_API_KEY}"
+schema_version = 3
 
 [gateway]
 host              = "${GATEWAY_HOST}"
@@ -41,78 +148,58 @@ allow_public_bind = true
 [reliability]
 provider_retries    = 2
 provider_backoff_ms = 500
+
+[providers.models.anthropic.custom]
+uri     = "${DEEPSEEK_ENDPOINT}"
+model   = "${DEFAULT_MODEL}"
+api_key = "${DEEPSEEK_API_KEY}"
+
+[agents.${AGENT_ALIAS}]
+model_provider  = "anthropic.custom"
+risk_profile    = "default"
+runtime_profile = "default"
+channels        = ${AGENT_CHANNELS}
+
+[risk_profiles.default]
+${RISK_BODY}
 EOF
+
+  if [[ -n "${RUNTIME_BODY}" ]]; then
+    cat <<EOF
+
+[runtime_profiles.default]
+${RUNTIME_BODY}
+EOF
+  fi
 
   if [[ -n "${BRAVE_API_KEY:-}" ]]; then
     cat <<EOF
 
 [web_search]
-enabled       = true
-provider      = "brave"
-brave_api_key = "${BRAVE_API_KEY}"
-max_results   = 5
-timeout_secs  = 20
+enabled         = true
+search_provider = "brave"
+brave_api_key   = "${BRAVE_API_KEY}"
+max_results     = 5
+timeout_secs    = 20
 EOF
     WS_WIRED=1
   else
     WS_WIRED=0
   fi
 
-  case "${AUTONOMY_LEVEL}" in
-    full)
-      cat <<EOF
-
-[autonomy]
-level                            = "full"
-workspace_only                   = false
-allowed_commands                 = ["*"]
-forbidden_paths                  = []
-allowed_roots                    = ["/"]
-max_actions_per_hour             = 100000
-max_cost_per_day_cents           = 1000000
-require_approval_for_medium_risk = false
-block_high_risk_commands         = false
-auto_approve                     = ["*"]
-EOF
-      ;;
-    read_only)
-      cat <<EOF
-
-[autonomy]
-level            = "read_only"
-allowed_commands = ["*"]
-EOF
-      ;;
-    supervised|*)
-      cat <<EOF
-
-[autonomy]
-level            = "supervised"
-allowed_commands = ["*"]
-EOF
-      ;;
-  esac
-
-  if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "${TELEGRAM_ALLOWED_USER_ID:-}" ]]; then
-    IFS=',' read -ra TG_USER_IDS <<< "${TELEGRAM_ALLOWED_USER_ID}"
-    TG_USER_LIST=""
-    for uid in "${TG_USER_IDS[@]}"; do
-      uid="${uid// /}"
-      [[ -z "$uid" ]] && continue
-      [[ -n "$TG_USER_LIST" ]] && TG_USER_LIST+=", "
-      TG_USER_LIST+="\"${uid}\""
-    done
+  if [[ "${TG_WIRED}" == "1" ]]; then
     cat <<EOF
 
-[channels_config.telegram]
-enabled       = true
-bot_token     = "${TELEGRAM_BOT_TOKEN}"
-allowed_users = [${TG_USER_LIST}]
-mention_only  = false
+[channels.telegram.${AGENT_ALIAS}]
+enabled      = true
+bot_token    = "${TELEGRAM_BOT_TOKEN}"
+mention_only = false
+
+[peer_groups.telegram_${AGENT_ALIAS}]
+channel        = "telegram"
+agents         = ["${AGENT_ALIAS}"]
+external_peers = [${TG_USER_LIST}]
 EOF
-    TG_WIRED=1
-  else
-    TG_WIRED=0
   fi
 } > "${ZC_CONFIG}"
 
@@ -493,7 +580,7 @@ EOF
 chmod 600 "${WS_DIR}"/IDENTITY.md "${WS_DIR}"/SOUL.md "${WS_DIR}"/USER.md "${WS_DIR}"/TOOLS.md
 
 echo "[init-deepseek] wrote ${ZC_CONFIG}"
-echo "[init-deepseek] provider = anthropic-custom:${DEEPSEEK_ENDPOINT}"
+echo "[init-deepseek] provider = anthropic.custom -> ${DEEPSEEK_ENDPOINT}"
 echo "[init-deepseek] model    = ${DEFAULT_MODEL}"
 echo "[init-deepseek] gateway  = ${GATEWAY_HOST}:${GATEWAY_PORT}  (allow_public_bind = true)"
 echo "[init-deepseek] persona  = ${AGENT_NAME}  (IDENTITY/SOUL/USER.md written to ${WS_DIR})"

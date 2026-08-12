@@ -22,10 +22,38 @@ A small Node proxy (`scripts/deepseek-proxy.mjs`, listening on
 appends an ABSOLUTE OVERRIDE block to the system prompt forbidding
 `NO_REPLY` in this DM channel and requiring cron answers to come from
 `cron_list` output (not memory). This keeps v4-flash on the cheapest
-non-thinking pricing and side-steps a ZeroClaw v0.7.3 bug where prior
-thinking blocks in conversation history are not passed back to the API
-correctly. ZeroClaw's `default_provider` points at the proxy, not directly
+non-thinking pricing and side-steps a ZeroClaw bug (seen on v0.7.3) where
+prior thinking blocks in conversation history are not passed back to the
+API correctly. ZeroClaw's provider entry points at the proxy, not directly
 at api.deepseek.com.
+
+## ZeroClaw v0.8.4 (schema v3, multi-agent layout)
+
+The image pins `ZEROCLAW_VERSION=v0.8.4`. Two things about that release
+shape this repo, and both are easy to regress:
+
+- **`config.toml` is schema v3 and `init-deepseek.sh` writes it natively**
+  (`schema_version = 3`). The flat v0.7 keys are gone: the provider is
+  `[providers.models.anthropic.custom]`, autonomy split into
+  `[risk_profiles.default]` + `[runtime_profiles.default]`, Telegram split
+  into `[channels.telegram.default]` (transport) plus
+  `[peer_groups.telegram_default]` (who may talk to the agent), and
+  `[agents.default]` joins them together. Validate any change with
+  `zeroclaw config migrate --json` - it must report
+  `migrated: false, valid: true`, meaning the file is already native v3.
+- **The install root is split three ways.** Persona/identity markdown lives
+  in `agents/<alias>/workspace/`; the SQLite stores (memory, sessions,
+  cron, costs) live in `data/` and partition by agent at the row level.
+  `init-deepseek.sh` relocates the pre-0.8 flat `workspace/` layout once,
+  rewrites absolute cron paths in `data/cron/jobs.db`, and breadcrumbs
+  `.layout-v3-migrated` so re-runs are no-ops. Write persona files to
+  `WS_DIR`, never to `${ZC_HOME}/workspace`.
+
+The dashboard is **not** built from source. The release tarball ships a
+prebuilt `web/dist`, which the Dockerfile installs from the same
+checksum-verified download as the binary. Building `web/` from the source
+tarball fails: `web/src/lib/api-generated` (and `api-descriptions`,
+`api-enums`) are codegen outputs excluded from the source archive.
 
 See [README.md](README.md) for the user-facing setup flow.
 
