@@ -70,6 +70,19 @@ migrate_legacy_layout() {
   : > "${ZC_HOME}/.layout-v3-migrated"
 }
 
+# ZeroClaw's own startup migration (v0.8.x, when it finds a pre-0.8
+# workspace/) relocates memory, sessions, state and devices.db into data/ but
+# leaves cron/ behind in the agent workspace, where the scheduler does not look
+# for it - the jobs silently vanish from `zeroclaw cron list`. Whichever
+# migration ran first, put the cron store on the path the scheduler reads.
+relocate_stray_cron() {
+  if [[ -d "${WS_DIR}/cron" && ! -e "${DATA_DIR}/cron" ]]; then
+    echo "init-deepseek: moving cron store into data/ (scheduler location)" >&2
+    mkdir -p "${DATA_DIR}"
+    mv "${WS_DIR}/cron" "${DATA_DIR}/cron"
+  fi
+}
+
 # Cron jobs store their command as an absolute path, so every job created
 # before the move still points into the old workspace. Rewrite them in place.
 rewrite_cron_paths() {
@@ -87,6 +100,7 @@ rewrite_cron_paths() {
 }
 
 migrate_legacy_layout
+relocate_stray_cron
 rewrite_cron_paths
 
 # Telegram allowlist feeds the peer group below, not the channel block: in v3
