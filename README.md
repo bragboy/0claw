@@ -152,14 +152,18 @@ ruby deploy.rb status <slug>
 ruby deploy.rb ssh
 # inside the VM:
 docker compose -p zeroclaw-<slug> --env-file tenants/<slug>/.env exec zeroclaw-hub zeroclaw doctor
-docker compose -p zeroclaw-<slug> --env-file tenants/<slug>/.env exec zeroclaw-hub zeroclaw agent -m "Reply with one word: pong"
+docker compose -p zeroclaw-<slug> --env-file tenants/<slug>/.env exec zeroclaw-hub zeroclaw agent --agent default -m "Reply with one word: pong"
+docker compose -p zeroclaw-<slug> --env-file tenants/<slug>/.env exec zeroclaw-hub zeroclaw cron list
+docker compose -p zeroclaw-<slug> --env-file tenants/<slug>/.env exec zeroclaw-hub zeroclaw memory stats
 docker compose -p zeroclaw-<slug> --env-file tenants/<slug>/.env exec zeroclaw-hub curl -sf http://127.0.0.1:8089/_health
 ```
 
 Expected signals:
 
-- `zeroclaw doctor` reports the provider as `anthropic-custom:http://127.0.0.1:8089` (the in-container proxy) and the credential as present.
-- `zeroclaw agent -m "..."` returns a clean text response from `deepseek-v4-flash`.
+- `zeroclaw doctor` reports the provider as `anthropic.custom` pointing at `http://127.0.0.1:8089` (the in-container proxy) and the credential as present.
+- `zeroclaw agent --agent default -m "..."` returns a clean text response from `deepseek-v4-flash`. Since v0.8 the agent alias is required.
+- `zeroclaw cron list` shows the tenant's scheduled jobs. An empty list on a tenant that had jobs means the cron store is not on the path the scheduler reads (`data/cron/jobs.db`).
+- `zeroclaw memory stats` shows a non-zero total on an established tenant.
 - The proxy `/_health` endpoint prints `ok`.
 
 To reach the dashboard from your laptop, open the SSH tunnel:
