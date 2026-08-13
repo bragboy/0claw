@@ -99,9 +99,52 @@ rewrite_cron_paths() {
        WHERE prompt LIKE '%${LEGACY_WS}/%';" >/dev/null 2>&1 || true
 }
 
+# Scripts the agent wrote for itself (brief runners and the like) can embed the
+# pre-0.8 workspace path in their own body, not just in the cron command. Those
+# references break silently: the job fires, the script runs, and it fails on a
+# missing file. Rewrite them the same way.
+rewrite_workspace_paths_in_scripts() {
+  local f
+  shopt -s nullglob
+  for f in "${WS_DIR}"/*.sh; do
+    if grep -q "${LEGACY_WS}/" "${f}" 2>/dev/null; then
+      echo "init-deepseek: rewriting legacy workspace paths in $(basename "${f}")" >&2
+      sed -i "s|${LEGACY_WS}/|${WS_DIR}/|g" "${f}"
+    fi
+  done
+  shopt -u nullglob
+}
+
+# v0.8 requires every cron job to name an owning agent - the implicit
+# default-agent fallback is gone. Jobs migrated from v0.7 carry an empty
+# agent_alias, and for an imperatively created job (not declared under
+# [cron.<alias>] in config) the scheduler then resolves no owner and skips it
+# silently: no run, no error, next_run just goes stale. Bind them.
+bind_cron_jobs_to_agent() {
+  local db="${DATA_DIR}/cron/jobs.db"
+  if [[ ! -f "${db}" ]]; then return 0; fi
+  if ! command -v sqlite3 >/dev/null 2>&1; then return 0; fi
+  # Older stores predate the column; the daemon adds it on its first v0.8 boot.
+  if ! sqlite3 "${db}" 'pragma table_info(cron_jobs);' 2>/dev/null | grep -q '|agent_alias|'; then
+    return 0
+  fi
+  local unowned
+  unowned="$(sqlite3 "${db}" \
+    "select count(*) from cron_jobs where agent_alias is null or trim(agent_alias) = '';" \
+    2>/dev/null || echo 0)"
+  if [[ "${unowned}" != "0" ]]; then
+    echo "init-deepseek: binding ${unowned} unowned cron job(s) to agent '${AGENT_ALIAS}'" >&2
+    sqlite3 "${db}" \
+      "update cron_jobs set agent_alias = '${AGENT_ALIAS}'
+         where agent_alias is null or trim(agent_alias) = '';" >/dev/null 2>&1 || true
+  fi
+}
+
 migrate_legacy_layout
 relocate_stray_cron
 rewrite_cron_paths
+rewrite_workspace_paths_in_scripts
+bind_cron_jobs_to_agent
 
 # Telegram allowlist feeds the peer group below, not the channel block: in v3
 # the channel carries transport credentials and the peer group decides who is
